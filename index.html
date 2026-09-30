@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3BitBTCRgFjvI7XQ8C40Rwcya5EOaXjWViTTOeghCvs='; style-src 'sha256-TLkH49ig+NRAXtVIhma5FGfAhIlvzbr5PhNutDyCMck='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-8AeB5eHSwCPfsqLy3Dz6EGeYsbui3SabTVuJt4HuR/o='; style-src 'sha256-MqFDkZZjK0X92b8uPpczhmoqSog+7dopzxQY5873Hd0='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -608,6 +608,39 @@ details.troca-manual[open] > summary { margin-bottom: 8px; }
 .puxar-sinc { position: fixed; top: 0; left: 50%; z-index: 60; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--superficie); color: var(--tinta-2); box-shadow: var(--sombra-forte); font-size: 13px; font-weight: 500; pointer-events: none; }
 .puxar-sinc.pronto { color: var(--acento-texto); background: var(--acento-fundo); }
 .puxar-sinc.pronto .icone { animation: girar 1s linear infinite; }
+.medidor-nota { font-size: 11.5px; color: var(--tinta-3); margin-top: 4px; }
+.rotulo-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tinta-2); }
+.barra-periodo-reg { gap: 10px; }
+.barra-periodo-reg input[type="date"], .barra-periodo-reg input[type="month"] { width: auto; min-width: 150px; }
+.mes-referencia .periodo-rotulo { font-size: 16px; }
+/* Digital no celular */
+.area-digital:empty { display: none; }
+.area-digital { display: flex; flex-direction: column; gap: 8px; }
+.ou-senha { text-align: center; font-size: 12.5px; color: var(--tinta-3); margin: 2px 0 0; }
+.bloco-digital:empty { display: none; }
+/* Importar extrato */
+.imp-lista { padding: 0; overflow: hidden; }
+.imp-linha { display: grid; grid-template-columns: 22px 48px minmax(200px, 2fr) minmax(130px, 1fr) minmax(150px, 1.2fr) 110px; gap: 10px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--grade); font-size: 13px; }
+.imp-linha:first-child { border-top: none; }
+.imp-linha.desmarcada { opacity: .55; }
+.imp-linha.duvida { background: var(--alerta-fundo); }
+.imp-linha input[type="text"], .imp-linha select { width: 100%; min-width: 0; font-size: 13px; }
+.imp-data { color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+.imp-desc { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.imp-valor { text-align: right; font-weight: 600; white-space: nowrap; }
+.imp-rodape { position: sticky; bottom: 0; background: var(--fundo); padding: 10px 0; }
+@media (max-width: 860px) {
+  .imp-linha { grid-template-columns: 22px 1fr auto; grid-template-areas: "c d v" "c t t" "c s s"; }
+  .imp-linha > input[type="checkbox"] { grid-area: c; }
+  .imp-data { display: none; }
+  .imp-desc { grid-area: d; }
+  .imp-linha > select:nth-of-type(1) { grid-area: t; }
+  .imp-linha > :nth-child(5) { grid-area: s; }
+  .imp-valor { grid-area: v; }
+}
+.barra-periodo-reg { justify-content: flex-start; }
+.barra-periodo-reg select, .barra-periodo-reg input { width: auto; flex: 0 0 auto; }
+.barra-periodo-reg .navegador-mes { flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -618,7 +651,7 @@ details.troca-manual[open] > summary { margin-bottom: 8px; }
 // Regra de segurança: nenhum texto do usuário entra no HTML como código.
 // Tudo é montado com createElement + textContent (inserir HTML como texto é proibido pela CSP).
 
-const VERSAO_APP = '1.4.0';
+const VERSAO_APP = '1.5.0';
 const MODO_CELULAR = true; // o montar.py troca para true na versão do celular (--celular)
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PROPS_DIRETAS = new Set(['value', 'checked', 'disabled', 'selected', 'hidden', 'readOnly', 'required', 'multiple', 'indeterminate']);
@@ -938,6 +971,74 @@ async function novoCodigoChaves(chaves, cred) {
   return { chaves: { ...chaves, recuperacao }, codigo };
 }
 
+// ---------- Digital do celular (WebAuthn com a extensão PRF) ----------
+// A digital nunca sai do celular e a senha nunca é gravada. Depois que o próprio Android confere a digital,
+// a chave de acesso ("passkey" do Gerenciador de Senhas do Google) entrega ao app um segredo (PRF).
+// Esse segredo, que só existe com a digital, cifra uma cópia da chave de dados guardada só neste aparelho.
+// Sem a digital, essa cópia não serve para nada.
+const AAD_DIGITAL = 'organizador-financeiro/chave/digital/v1';
+
+async function digitalSuportada() {
+  try {
+    return !!(window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+      && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+  } catch { return false; }
+}
+
+async function _kekDaDigital(segredo, sal) {
+  const base = await crypto.subtle.importKey('raw', segredo, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: sal, info: _enc.encode(AAD_DIGITAL) },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+function _erroDigital(msg, marca) { const e = new Error(msg); e[marca] = true; return e; }
+
+// Pede a digital e devolve o segredo PRF (32 bytes).
+async function _segredoDaDigital(credId, salPrf) {
+  const r = await navigator.credentials.get({ publicKey: {
+    challenge: bytesAleatorios(32), rpId: location.hostname, timeout: 60000, userVerification: 'required',
+    allowCredentials: [{ type: 'public-key', id: credId }],
+    extensions: { prf: { eval: { first: salPrf } } },
+  } });
+  const ext = r && r.getClientExtensionResults ? r.getClientExtensionResults() : {};
+  const seg = ext.prf && ext.prf.results && ext.prf.results.first;
+  if (!seg) throw _erroDigital('Este celular não entregou o segredo da digital.', 'semPrf');
+  return new Uint8Array(seg);
+}
+
+// Liga a digital: confere a senha, cria a chave de acesso e guarda a chave de dados cifrada pelo segredo da digital.
+async function criarDigital(chaves, senha) {
+  const dek = await dekPorCredencial(chaves, { tipo: 'senha', valor: senha }); // lança erro se a senha estiver errada
+  try {
+    const salPrf = bytesAleatorios(32);
+    const cred = await navigator.credentials.create({ publicKey: {
+      rp: { name: 'Organizador Financeiro', id: location.hostname },
+      user: { id: bytesAleatorios(16), name: 'Organizador Financeiro', displayName: 'Cofre do Organizador Financeiro' },
+      challenge: bytesAleatorios(32), timeout: 60000,
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' },
+      extensions: { prf: { eval: { first: salPrf } } },
+    } });
+    const ext = cred.getClientExtensionResults ? cred.getClientExtensionResults() : {};
+    if (!ext.prf || ext.prf.enabled === false) throw _erroDigital('Este celular não oferece o recurso seguro da digital para aplicativos da web.', 'semPrf');
+    const credId = new Uint8Array(cred.rawId);
+    const seg = ext.prf.results && ext.prf.results.first ? new Uint8Array(ext.prf.results.first) : await _segredoDaDigital(credId, salPrf);
+    const sal = bytesAleatorios(16);
+    const kek = await _kekDaDigital(seg, sal); seg.fill(0);
+    const p = await cifrarBytes(kek, dek, AAD_DIGITAL);
+    return { credId: bytesParaB64(credId), salPrf: bytesParaB64(salPrf), sal: bytesParaB64(sal), iv: p.iv, ct: p.ct };
+  } finally { dek.fill(0); }
+}
+
+// Entra com a digital: devolve a chave de dados (não extraível).
+async function abrirChavePelaDigital(reg) {
+  const seg = await _segredoDaDigital(b64ParaBytes(reg.credId), b64ParaBytes(reg.salPrf));
+  const kek = await _kekDaDigital(seg, b64ParaBytes(reg.sal)); seg.fill(0);
+  let dek;
+  try { dek = await decifrarBytes(kek, reg, AAD_DIGITAL); } catch { throw _erroDigital('A digital guardada não confere.', 'outroCofre'); }
+  return importarChaveDados(dek);
+}
+
 async function comprimir(bytes) {
   if (typeof CompressionStream === 'undefined') return { bytes, z: 0 };
   const s = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
@@ -1166,7 +1267,7 @@ async function compartilharCofre(env, nome) {
 // VERSAO_DADOS sobe quando o formato muda. Cada versão nova ganha uma função em MIGRACOES,
 // e os dados antigos são convertidos sozinhos ao abrir (nada do que já foi cadastrado se perde).
 
-const VERSAO_DADOS = 2;
+const VERSAO_DADOS = 3;
 const MIGRACOES = {
   // 1 -> 2 (v1.2.0): cadastro de pessoas (parceiros), categoria de repasse, campos pagoEm/divisao nos lançamentos.
   1: (db) => {
@@ -1177,6 +1278,9 @@ const MIGRACOES = {
     }
     db.versao = 2;
   },
+  // 2 -> 3 (v1.5.0): campos novos opcionais (limite compartilhado entre cartões, código da linha do extrato importado).
+  // Não há o que converter; a versão sobe para que um app antigo não apague esses campos ao sincronizar.
+  2: (db) => { db.versao = 3; },
 };
 
 let DB = null;                                  // dados abertos (só existem na memória enquanto desbloqueado)
@@ -1260,6 +1364,9 @@ function sanitizarConta(c) {
     o.fechamento = vInt(c.fechamento, 1, 31, 1);
     o.vencimento = vInt(c.vencimento, 1, 31, 10);
     o.contaPagamentoId = typeof c.contaPagamentoId === 'string' && RX_ID.test(c.contaPagamentoId) ? c.contaPagamentoId : null;
+    // v3: este cartão usa o limite de outro (ex.: cartão pessoal e do escritório no mesmo banco, limite único)
+    o.limiteCom = typeof c.limiteCom === 'string' && RX_ID.test(c.limiteCom) && c.limiteCom !== c.id ? c.limiteCom : null;
+    if (o.limiteCom) o.limite = 0;
     o.saldoInicial = 0;
   }
   return o;
@@ -1309,6 +1416,8 @@ function sanitizarLanc(l) {
     o.origemId = l.origemId;
     if (typeof l.parceiroId === 'string' && RX_ID.test(l.parceiroId)) o.parceiroId = l.parceiroId;
   }
+  // v3: identificador da linha no extrato do banco (evita importar a mesma linha duas vezes)
+  if (typeof l.idExterno === 'string' && l.idExterno.trim()) o.idExterno = vTexto(l.idExterno, 120);
   return o;
 }
 
@@ -1364,6 +1473,13 @@ function sanitizarDB(bruto) {
   if (recuperada && !contas.has('k-recuperada')) {
     db.contas.push({ ...sanitizarConta({ id: 'k-recuperada', nome: 'Conta recuperada', tipo: 'outra', escopo: 'P' }), criadoEm: agoraISO(), atualizadoEm: agoraISO() });
   }
+  // Limite compartilhado só vale apontando para outro cartão que tenha limite próprio (sem correntes).
+  const porId = new Map(db.contas.map((c) => [c.id, c]));
+  for (const c of db.contas) {
+    if (!c.limiteCom) continue;
+    const alvo = porId.get(c.limiteCom);
+    if (!alvo || alvo.tipo !== 'cartao' || alvo.limiteCom) c.limiteCom = null;
+  }
   const cats = new Set(db.categorias.map((c) => c.id));
   for (const l of db.lancamentos) if (l.categoriaId && !cats.has(l.categoriaId)) l.categoriaId = null;
   return db;
@@ -1371,7 +1487,7 @@ function sanitizarDB(bruto) {
 
 function migrar(db) {
   if (!Number.isInteger(db.versao) || db.versao < 1) db.versao = 1;
-  if (db.versao > VERSAO_DADOS) throw new Error('Este cofre foi salvo por uma versão mais nova do Organizador. Abra-o com a versão mais recente do aplicativo.');
+  if (db.versao > VERSAO_DADOS) { const e = new Error('Este cofre foi salvo por uma versão mais nova do Organizador. Abra-o com a versão mais recente do aplicativo.'); e.versaoNova = true; throw e; }
   while (db.versao < VERSAO_DADOS) {
     const f = MIGRACOES[db.versao];
     if (!f) throw new Error('Não sei converter os dados da versão ' + db.versao + '.');
@@ -1488,6 +1604,7 @@ async function gravarNoArquivoComSeguranca(env) {
         avisar('O arquivo da pasta é de outro cofre. Não gravei por cima dele. Escolha a pasta certa em Configurações › Backup e sincronização.', 'erro');
         return false;
       }
+      if (e.versaoNova) { avisar('O celular gravou com uma versão mais nova do app. Recarregue esta página (F5) para atualizar. Nada foi perdido.', 'atencao'); return false; }
       throw e;
     }
     const r = juntarDados(doArquivo);
@@ -1813,9 +1930,20 @@ function faturasDoCartao(cartao) {
 const ROTULO_FATURA = { aberta: 'Aberta', fechada: 'Fechada', paga: 'Paga', vencida: 'Vencida', vazia: 'Sem gastos' };
 
 // Quanto do limite está comprometido (inclui parcelas futuras).
+// Limite compartilhado: o cartão "dono" do limite e os que apontam para ele (limiteCom) usam o mesmo limite;
+// "usado" soma todos; "devido" é só o deste cartão.
+function grupoDeLimite(cartao) {
+  const dono = cartao.limiteCom ? contaPorId(cartao.limiteCom) : cartao;
+  if (!dono || dono.tipo !== 'cartao') return { dono: cartao, membros: [cartao] };
+  const membros = DB.contas.filter((c) => c.tipo === 'cartao' && !c.arquivada && (c.id === dono.id || c.limiteCom === dono.id));
+  return { dono, membros: membros.length ? membros : [cartao] };
+}
 function usoDoCartao(cartao) {
   const devido = -saldoConta(cartao);
-  return { devido, disponivel: cartao.limite ? cartao.limite - devido : null };
+  const g = grupoDeLimite(cartao);
+  const usado = g.membros.length > 1 ? somar(g.membros, (c) => -saldoConta(c)) : devido;
+  const limite = g.dono.limite || 0;
+  return { devido, usado, limite, disponivel: limite ? limite - usado : null, compartilhado: g.membros.length > 1 ? g.membros.filter((c) => c.id !== cartao.id) : [] };
 }
 
 // ---------- Pendências: a pagar, a receber e faturas ----------
@@ -2173,6 +2301,7 @@ const ICONES = {
   patrimonio: 'M3 17l6-6 4 4 8-8 M15 7h6v6',
   ajustes: 'M4 6h9 M17 6h3 M4 12h3 M11 12h9 M4 18h11 M19 18h1 M15 4v4 M9 10v4 M17 16v4',
   cadeado: 'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4',
+  digital: 'M7 10a5 5 0 0 1 10 0v3 M12 10v6 M9.5 10.5a2.5 2.5 0 0 1 5 0V14c0 2-.5 3.5-1.5 5 M9.5 13v1c0 2.5-.8 4.2-2 5.5 M4.5 14.5V10a7.5 7.5 0 0 1 12.8-5.3 M19.5 9.5V13c0 2.8-.6 5-1.8 7',
   olho: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   olhoFechado: 'M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9 M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6 M9.9 9.9a3 3 0 0 0 4.2 4.2',
   mais: 'M12 5v14 M5 12h14',
@@ -2702,11 +2831,46 @@ async function ligarPasta() {
   }
 }
 
+// ---------- Digital (só no celular): registro local, fora do cofre e fora do Drive ----------
+const DIGITAL_DIAS_SENHA = 30; // uma vez por mês a senha é pedida, para não cair no esquecimento
+const lerDigital = async () => { try { const r = await idbGet('digital'); return r && r.credId ? r : null; } catch { return null; } };
+const apagarDigital = () => idbDel('digital').catch(() => {});
+async function anotarSenhaDigitada() { const r = await lerDigital(); if (r) { r.ultimaSenha = agoraISO(); await idbSet('digital', r); } }
+let _digitalTentada = false;
+
+async function oferecerDigital(env, area, erro) {
+  if (!MODO_CELULAR) return;
+  const reg = await lerDigital();
+  if (!reg) return;
+  if (!reg.ultimaSenha || Date.now() - Date.parse(reg.ultimaSenha) > DIGITAL_DIAS_SENHA * 86400000) {
+    area.prepend(el('p', { class: 'nota', text: 'A digital está ligada. Uma vez a cada ' + DIGITAL_DIAS_SENHA + ' dias o app pede a senha, para o senhor não esquecê-la.' }));
+    return;
+  }
+  const bt = el('button', { class: 'botao primario grande', type: 'button' }, icone('digital', 20), ' Entrar com a digital');
+  const tentar = async (automatico) => {
+    bt.disabled = true; if (!automatico) erro.textContent = '';
+    try {
+      const chave = await abrirChavePelaDigital(reg);
+      await abrirSessao(env, chave);
+    } catch (e) {
+      bt.disabled = false;
+      if (e && (e.outroCofre || e.name === 'OperationError')) {
+        await apagarDigital(); bt.remove();
+        erro.textContent = 'A digital guardada não abre este cofre (ele foi trocado). Entre com a senha e ligue a digital de novo em Configurações.';
+      } else if (!automatico) erro.textContent = e && e.name === 'NotAllowedError' ? 'Digital cancelada. Toque de novo ou use a senha.' : 'Não foi possível usar a digital. Entre com a senha.';
+    }
+  };
+  bt.addEventListener('click', () => tentar(false));
+  area.prepend(bt, el('p', { class: 'ou-senha', text: 'ou digite a senha' }));
+  if (!_digitalTentada) { _digitalTentada = true; tentar(true); }
+}
+
 function telaDesbloquear(env) {
   const s = campoSenha({ placeholder: 'Senha mestra', autocomplete: 'current-password' });
   const erro = el('div', { class: 'erro-texto', role: 'alert' });
   const botao = el('button', { class: 'botao primario grande', type: 'submit' }, icone('cadeado', 18), ' Desbloquear');
   const quando = env.salvoEm ? new Date(env.salvoEm) : null;
+  const areaDigital = el('div', { class: 'area-digital' });
   const nuvem = nuvemLigada()
     ? (nuvemTemToken() ? 'Google Drive conectado: sincroniza assim que o cofre abrir.' : 'Google Drive: sincroniza quando houver internet (ou depois de entrar no Google).')
     : null;
@@ -2714,6 +2878,7 @@ function telaDesbloquear(env) {
     el('h1', { text: 'Cofre bloqueado' }),
     quando ? el('p', { class: 'acesso-texto', text: 'Último salvamento: ' + dataBR(isoData(quando)) + ' às ' + horaCurta(env.salvoEm) + '.' }) : null,
     nuvem ? el('p', { class: 'nota', text: nuvem }) : null,
+    areaDigital,
     s.caixa, erro, botao,
     el('div', { class: 'acesso-links' },
       el('button', { class: 'link-botao', type: 'button', text: 'Esqueci a senha', onclick: () => telaRecuperar(env) }),
@@ -2733,9 +2898,10 @@ function telaDesbloquear(env) {
       return;
     }
     s.inp.value = '';
-    try { await abrirSessao(env, chave); } catch (err) { botao.disabled = false; limpar(botao).append(icone('cadeado', 18), ' Desbloquear'); erro.textContent = err.message; }
+    try { await abrirSessao(env, chave); if (MODO_CELULAR) anotarSenhaDigitada(); } catch (err) { botao.disabled = false; limpar(botao).append(icone('cadeado', 18), ' Desbloquear'); erro.textContent = err.message; }
   });
   telaAcesso(form);
+  oferecerDigital(env, areaDigital, erro);
 }
 
 async function abrirSessao(env, chave, { entrar = true } = {}) {
@@ -3213,19 +3379,29 @@ function telaLista(tipo, cont) {
   const T = TXT[tipo];
   const f = ESTADO.filtros[tipo];
   const visao = ESTADO.visao[tipo] || 'periodo';
+  // Aqui aparece só o mês de referência (o do Painel; normalmente o mês atual).
+  // Outros meses, anos, dias e intervalos ficam no Registro de lançamentos, em Configurações.
+  const mesRef = ESTADO.periodo.mes || mesAtual();
+  const abrirOutros = () => abrirRegistro({ tipo, periodo: { tipo: 'mes', mes: mesRef }, filtros: { ...f }, origem: { aba: tipo === 'entrada' ? 'entradas' : 'saidas', rotulo: T.plural } });
   let itens;
-  if (visao === 'periodo') itens = filtrarLancamentos(tipo, mesesDoPeriodo(), f).sort(porDataDesc);
+  if (visao === 'periodo') itens = filtrarLancamentos(tipo, [mesRef], f).sort(porDataDesc);
   else if (visao === 'pendentes') itens = filtrarLancamentos(tipo, null, { ...f, status: 'pendente' }).sort(porDataAsc);
   else if (visao === 'recentes') itens = filtrarLancamentos(tipo, null, f).sort((a, b) => (a.atualizadoEm < b.atualizadoEm ? 1 : -1)).slice(0, 100);
   else itens = filtrarLancamentos(tipo, null, f).sort(porDataDesc);
   const total = somar(itens, (l) => l.valor);
   const pago = somar(itens.filter((l) => l.status === 'pago'), (l) => l.valor);
 
-  const visoes = [['periodo', 'Por mês'], ['pendentes', T.pendente], ['recentes', 'Últimos lançados'], ['tudo', 'Tudo']];
+  const visoes = [['periodo', 'Do mês'], ['pendentes', T.pendente], ['recentes', 'Últimos lançados'], ['tudo', 'Tudo']];
   cont.appendChild(el('div', { class: 'barra-filtros' },
     alternador(visoes, visao, (v) => { ESTADO.visao[tipo] = v; ESTADO.limiteLista = 300; renderizar(true); }),
     el('button', { class: 'botao primario', type: 'button', onclick: () => abrirFormLancamento({ tipo }) }, icone('mais', 18), ' ' + T.novo)));
-  if (visao === 'periodo') cont.appendChild(barraPeriodo(() => renderizar()));
+  if (visao === 'periodo') {
+    cont.appendChild(el('div', { class: 'barra-filtros mes-referencia' },
+      el('strong', { class: 'periodo-rotulo', text: capitalizar(nomeMes(mesRef)) }),
+      mesRef !== mesAtual() ? el('button', { class: 'link-botao', type: 'button', text: 'Voltar para o mês atual', onclick: () => { ESTADO.periodo = { tipo: 'mes', mes: mesAtual() }; renderizar(); } }) : null,
+      el('div', { class: 'espaco' }),
+      el('button', { class: 'botao pequeno', type: 'button', title: 'Meses anteriores, anos, dias e intervalos, no Registro de lançamentos', onclick: abrirOutros }, icone('tabela', 16), ' Outros meses e filtros')));
+  }
 
   // Filtros
   const busca = el('input', { type: 'search', placeholder: 'Buscar por nome, pessoa, valor…', value: f.busca || '', class: 'busca' });
@@ -3251,7 +3427,7 @@ function telaLista(tipo, cont) {
   const atrasados = itens.filter((l) => l.status === 'pendente' && l.data < hojeISO());
   // Cada total abre o Registro de lançamentos já com este período e estes filtros, para analisar.
   const noRegistro = (status) => () => abrirRegistro({
-    tipo, periodo: visao === 'periodo' ? ESTADO.periodo : 'tudo',
+    tipo, periodo: visao === 'periodo' ? { tipo: 'mes', mes: mesRef } : 'tudo',
     filtros: { ...f, status: status !== undefined ? status : visao === 'pendentes' ? 'pendente' : f.status },
     ordem: visao === 'recentes' ? 'recentes' : visao === 'pendentes' ? 'data-asc' : 'data-desc',
     origem: { aba: tipo === 'entrada' ? 'entradas' : 'saidas', rotulo: T.plural },
@@ -3823,11 +3999,14 @@ function abrirFormLancamento({ tipo, lanc, copia, preset }) {
       const mudouSerie = lanc.grupo && campos.some((k) => (reg[k] ?? '') !== (lanc[k] ?? ''));
       let alvo = [lanc];
       if (mudouSerie) {
-        const seguintes = DB.lancamentos.filter((x) => x.grupo === lanc.grupo && x.parcela > lanc.parcela);
+        let seguintes = DB.lancamentos.filter((x) => x.grupo === lanc.grupo && x.parcela > lanc.parcela);
+        // valor novo não mexe no que já foi pago (reajuste vale daqui para a frente)
+        if (reg.valor !== lanc.valor) seguintes = seguintes.filter((x) => x.status === 'pendente' || ehCartao(x.contaId));
         if (seguintes.length) {
+          const fixo = lanc.rec === 'fixo';
           const r = await escolher({ titulo: 'Alterar a série?', texto: 'Este lançamento se repete. Aplicar a alteração a:', opcoes: [
-            { valor: 'um', rotulo: 'Só este (' + lanc.parcela + '/' + lanc.parcelas + ')' },
-            { valor: 'seg', rotulo: 'Este e os seguintes', detalhe: (seguintes.length + 1) + ' lançamentos' }] });
+            { valor: 'um', rotulo: fixo ? 'Só este mês (variação)' : 'Só esta parcela (' + lanc.parcela + '/' + lanc.parcelas + ')', detalhe: fixo ? 'Ex.: a conta deste mês veio diferente' : null },
+            { valor: 'seg', rotulo: fixo ? 'Este e os próximos (reajuste)' : 'Esta e as seguintes', detalhe: (seguintes.length + 1) + ' lançamentos' + (reg.valor !== lanc.valor ? ', só os ainda não pagos' : '') }] });
           if (!r) return;
           if (r === 'seg') alvo = alvo.concat(seguintes);
         }
@@ -3927,20 +4106,27 @@ function registrarPagamento(l) {
   const selConta = el('select', null, opcoesContas((c) => c.tipo !== 'cartao', l.contaId));
   const info = el('div', { class: 'form-resumo' });
   const seguintes = l.grupo ? DB.lancamentos.filter((x) => x.grupo === l.grupo && x.parcela > l.parcela && x.status === 'pendente').sort((a, b) => a.parcela - b.parcela) : [];
-  let opMenor = 'restante', opMaior = seguintes.length ? 'abater' : 'juros';
-  const escolhasMenor = alternador([['restante', 'O restante continua ' + T.pendente.toLowerCase()], ['desconto', 'Dar desconto (quitar)']], opMenor, (x) => { opMenor = x; atualizar(); });
-  const escolhasMaior = alternador(seguintes.length ? [['abater', 'Abater das próximas parcelas'], ['juros', 'Juros/multa (não abater)']] : [['juros', 'Juros/multa']], opMaior, (x) => { opMaior = x; atualizar(); });
+  // Fixo mensal (plano de saúde, aluguel…): valor diferente costuma ser variação do mês ou reajuste, não "abater parcelas".
+  const fixo = l.rec === 'fixo';
+  const opsFixo = [['variacao', 'Só este mês (variação)'], ...(seguintes.length ? [['reajuste', 'Este e os próximos (reajuste)']] : [])];
+  let opMenor = fixo ? 'variacao' : 'restante', opMaior = fixo ? 'variacao' : seguintes.length ? 'abater' : 'juros';
+  const escolhasMenor = alternador(fixo ? [...opsFixo, ['restante', 'Pagou só uma parte']] : [['restante', 'O restante continua ' + T.pendente.toLowerCase()], ['desconto', 'Dar desconto (quitar)']], opMenor, (x) => { opMenor = x; atualizar(); });
+  const escolhasMaior = alternador(fixo ? [...opsFixo, ['juros', 'Juros/multa']] : seguintes.length ? [['abater', 'Abater das próximas parcelas'], ['juros', 'Juros/multa (não abater)']] : [['juros', 'Juros/multa']], opMaior, (x) => { opMaior = x; atualizar(); });
+  const notaFixo = (op, val) => op === 'variacao' ? 'Só este mês fica com ' + moeda(val) + '; os próximos continuam com ' + moeda(l.valor) + '.'
+    : op === 'reajuste' ? 'Este mês e os ' + seguintes.length + ' próximos (ainda não pagos) passam a ' + moeda(val) + '.' : null;
   const atualizar = () => {
     limpar(info);
     const val = v.ler() || 0;
     if (val && val < l.valor) {
       info.appendChild(el('p', { class: 'nota', text: `${ent ? 'Recebido' : 'Pago'} ${moeda(val)} de ${moeda(l.valor)}. Diferença: ${moeda(l.valor - val)}.` }));
       info.appendChild(escolhasMenor);
-      info.appendChild(el('p', { class: 'nota', text: opMenor === 'restante' ? 'Fica um lançamento ' + T.pendente.toLowerCase() + ' de ' + moeda(l.valor - val) + ', com o mesmo vencimento.' : 'O valor fica corrigido para ' + moeda(val) + ' e nada mais é cobrado.' }));
+      info.appendChild(el('p', { class: 'nota', text: notaFixo(opMenor, val) || (opMenor === 'restante' ? 'Fica um lançamento ' + T.pendente.toLowerCase() + ' de ' + moeda(l.valor - val) + ', com o mesmo vencimento.' : 'O valor fica corrigido para ' + moeda(val) + ' e nada mais é cobrado.') }));
     } else if (val > l.valor) {
       info.appendChild(el('p', { class: 'nota', text: `${ent ? 'Recebido' : 'Pago'} ${moeda(val - l.valor)} a mais.` }));
       info.appendChild(escolhasMaior);
-      if (opMaior === 'abater') info.appendChild(el('p', { class: 'nota', text: 'A diferença reduz as próximas parcelas desta série (e quita as que ficarem zeradas).' }));
+      const nf = notaFixo(opMaior, val);
+      if (nf) info.appendChild(el('p', { class: 'nota', text: nf }));
+      else if (opMaior === 'abater') info.appendChild(el('p', { class: 'nota', text: 'A diferença reduz as próximas parcelas desta série (e quita as que ficarem zeradas).' }));
     }
   };
   v.inp.addEventListener('input', debounce(atualizar, 150));
@@ -3964,7 +4150,15 @@ function registrarPagamento(l) {
     const divOriginal = l.divisao;
     Object.assign(l, { status: 'pago', pagoEm: inpData.value, contaId: selConta.value });
     let msg = (ent ? 'Recebimento' : 'Pagamento') + ' registrado.';
-    if (val < original) {
+    const opFixo = fixo ? (val < original ? opMenor : val > original ? opMaior : null) : null;
+    if (opFixo === 'variacao' || opFixo === 'reajuste') {
+      l.valor = val;
+      if (divOriginal) l.divisao = escalarDivisao(divOriginal, val / original);
+      if (opFixo === 'reajuste') {
+        for (const x of seguintes) { const f = val / x.valor; x.valor = val; if (x.divisao) x.divisao = escalarDivisao(x.divisao, f); carimbar(x); if (x.tipo === 'entrada') sincronizarRepasses(x); }
+        msg = 'Registrado. Reajuste aplicado a este mês e aos ' + seguintes.length + ' próximos: ' + moeda(val) + '.';
+      } else msg = 'Registrado com o valor deste mês: ' + moeda(val) + '.';
+    } else if (val < original) {
       l.valor = val;
       if (divOriginal) l.divisao = escalarDivisao(divOriginal, val / original);
       if (opMenor === 'restante') {
@@ -4065,7 +4259,8 @@ function cartaoCartao(c) {
   const mesAt = faturaAtual(c);
   const atual = fats.find((f) => f.mes === mesAt) || { mes: mesAt, total: 0, restante: 0, status: 'vazia', ...datasFatura(c, mesAt) };
   const aPagar = fats.filter((f) => f.restante > 0 && f.mes < mesAt);
-  const frac = c.limite ? clamp(uso.devido / c.limite, 0, 1) : 0;
+  const frac = uso.limite ? clamp(uso.usado / uso.limite, 0, 1) : 0;
+  const nomesComp = uso.compartilhado.map((x) => x.nome).join(', ');
   return el('article', { class: 'conta-cartao cartao-credito', style: { '--cor-conta': `var(--s${c.cor + 1})` } },
     el('header', null, el('div', null, el('strong', { text: c.nome }), el('span', { text: 'Fecha dia ' + c.fechamento + ' · vence dia ' + c.vencimento + ' · ' + ESCOPOS[c.escopo] })),
       el('button', { class: 'botao-icone pequeno', type: 'button', title: 'Editar cartão', 'aria-label': 'Editar cartão', onclick: () => abrirFormConta({ conta: c }) }, icone('editar', 16))),
@@ -4074,9 +4269,10 @@ function cartaoCartao(c) {
       el('strong', { class: 'valor', text: moeda(Math.max(0, atual.total)) }),
       el('span', { class: 'texto-suave', text: 'vence ' + dataBR(atual.vencimento) })),
     aPagar.length ? el('div', { class: 'aviso-fatura' }, icone('alerta', 16), el('span', { class: 'valor', text: aPagar.length === 1 ? 'Fatura de ' + nomeMesCurto(aPagar[0].mes) + ' a pagar: ' + moeda(aPagar[0].restante) : aPagar.length + ' faturas a pagar: ' + moeda(somar(aPagar, (f) => f.restante)) })) : null,
-    c.limite ? el('div', { class: 'medidor', title: 'Limite usado' },
+    uso.limite ? el('div', { class: 'medidor', title: nomesComp ? 'Limite compartilhado com ' + nomesComp : 'Limite usado' },
       el('div', { class: ['medidor-trilho', frac > 0.9 ? 'critico' : frac > 0.7 ? 'alerta' : ''] }, el('span', { style: { width: frac * 100 + '%' } })),
-      el('div', { class: 'medidor-texto' }, el('span', { class: 'valor', text: 'Usado ' + moeda(uso.devido) }), el('span', { class: 'valor', text: 'Disponível ' + moeda(uso.disponivel) }))) : null,
+      el('div', { class: 'medidor-texto' }, el('span', { class: 'valor', text: 'Usado ' + moeda(uso.usado) + (nomesComp ? ' (os dois)' : '') }), el('span', { class: 'valor', text: 'Disponível ' + moeda(uso.disponivel) })),
+      nomesComp ? el('div', { class: 'medidor-nota', text: 'Limite de ' + moeda(uso.limite) + ' compartilhado com ' + nomesComp + ' · este cartão: ' + moeda(uso.devido) }) : null) : null,
     el('footer', null,
       el('button', { class: 'link-botao', type: 'button', text: 'Faturas', onclick: () => abrirFaturas(c) }),
       el('button', { class: 'link-botao', type: 'button', text: 'Pagar fatura', onclick: () => abrirPagamentoFatura(c, aPagar[0] || atual) }),
@@ -4165,6 +4361,15 @@ function abrirFormConta({ conta, tipo }) {
   const fech = el('input', { type: 'number', min: 1, max: 31, value: st.fechamento, class: 'curto' });
   const venc = el('input', { type: 'number', min: 1, max: 31, value: st.vencimento, class: 'curto' });
   const pagadora = el('select', null, [el('option', { value: '', text: '—' }), ...opcoesContas((c) => c.tipo !== 'cartao', st.contaPagamentoId)]);
+  // Limite compartilhado: só com cartão que tem limite próprio; quem já empresta o limite não pode passar a usar o de outro.
+  const temDependentes = editando && DB.contas.some((c) => c.limiteCom === conta.id);
+  const donosPossiveis = DB.contas.filter((c) => c.tipo === 'cartao' && !c.arquivada && !c.limiteCom && (!conta || c.id !== conta.id));
+  const selLimite = el('select', { disabled: temDependentes }, [el('option', { value: '', text: 'Limite próprio' }),
+    ...donosPossiveis.map((c) => el('option', { value: c.id, text: 'Compartilha o limite do ' + c.nome, selected: st.limiteCom === c.id }))]);
+  const caixaLimite = campo('Limite (opcional)', limite.inp);
+  const mostrarLimite = () => { caixaLimite.hidden = !!selLimite.value; };
+  selLimite.addEventListener('change', mostrarLimite);
+  mostrarLimite();
   const erro = el('div', { class: 'erro-texto', role: 'alert' });
   const usada = editando && DB.lancamentos.some((l) => l.contaId === conta.id || l.contaDestinoId === conta.id);
 
@@ -4177,7 +4382,8 @@ function abrirFormConta({ conta, tipo }) {
   ];
   if (st.tipo === 'cartao') {
     corpo.push(
-      el('div', { class: 'grade-campos tres' }, campo('Dia de fechamento', fech), campo('Dia de vencimento', venc), campo('Limite (opcional)', limite.inp)),
+      el('div', { class: 'grade-campos tres' }, campo('Dia de fechamento', fech), campo('Dia de vencimento', venc), caixaLimite),
+      campo('Limite', selLimite, temDependentes ? 'Outro cartão usa o limite deste; por isso ele fica próprio.' : 'Ex.: cartão pessoal e do escritório no mesmo banco, com um limite só: cadastre o limite num e, no outro, escolha "Compartilha o limite do…".'),
       campo('Conta que paga a fatura', pagadora, 'Já vem escolhida quando o senhor clicar em "Pagar fatura".'));
   } else {
     corpo.push(el('div', { class: 'grade-campos' },
@@ -4195,7 +4401,7 @@ function abrirFormConta({ conta, tipo }) {
     if (o.tipo === 'cartao') {
       const f = parseInt(fech.value, 10), v = parseInt(venc.value, 10);
       if (!(f >= 1 && f <= 31 && v >= 1 && v <= 31)) { erro.textContent = 'Dias de fechamento e vencimento vão de 1 a 31.'; return; }
-      Object.assign(o, { fechamento: f, vencimento: v, limite: limite.ler() || 0, contaPagamentoId: pagadora.value || null, saldoInicial: 0, dataSaldo: '2000-01-01' });
+      Object.assign(o, { fechamento: f, vencimento: v, limite: selLimite.value ? 0 : limite.ler() || 0, limiteCom: selLimite.value || null, contaPagamentoId: pagadora.value || null, saldoInicial: 0, dataSaldo: '2000-01-01' });
     } else {
       if (!RX_DATA.test(dataSaldo.value)) { erro.textContent = 'Informe a data do saldo.'; return; }
       const v = saldo.ler() || 0;
@@ -4419,14 +4625,14 @@ function abrirFormCategoria(cat, tipo) {
 }
 
 // ----- Configurações: abas internas (o que era "Ajustes e backup") -----
-const ABAS_CONFIG = [['ajustes', 'Ajustes', 'ajustes'], ['backup', 'Backup e sincronização', 'repetir'], ['cadastros', 'Cadastros', 'pessoa'], ['registro', 'Registro de lançamentos', 'tabela']];
+const ABAS_CONFIG = [['ajustes', 'Ajustes', 'ajustes'], ['backup', 'Backup e sincronização', 'repetir'], ['cadastros', 'Cadastros', 'pessoa'], ['registro', 'Registro de lançamentos', 'tabela'], ['importar', 'Importar extrato', 'enviar']];
 
 TELAS.ajustes = (cont) => {
   const aba = ABAS_CONFIG.some(([v]) => v === ESTADO.config) ? ESTADO.config : 'ajustes';
   cont.appendChild(el('div', { class: 'abas-config', role: 'tablist', 'aria-label': 'Partes das configurações' }, ABAS_CONFIG.map(([v, r, ic]) =>
     el('button', { type: 'button', role: 'tab', class: ['aba-config', v === aba ? 'ativa' : ''], 'aria-selected': v === aba ? 'true' : 'false',
       onclick: () => { ESTADO.config = v; if (v !== 'registro') ESTADO.registro.origem = null; renderizar(true); } }, icone(ic, 16), el('span', { text: r })))));
-  ({ ajustes: configAjustes, backup: configBackup, cadastros: configCadastros, registro: telaRegistro })[aba](cont);
+  ({ ajustes: configAjustes, backup: configBackup, cadastros: configCadastros, registro: telaRegistro, importar: telaImportar })[aba](cont);
   cont.appendChild(el('p', { class: 'rodape-ajustes', text: 'Organizador Financeiro ' + VERSAO_APP + ' · formato de dados ' + VERSAO_DADOS + ' · ' + DB.lancamentos.length + ' lançamentos, ' + DB.contas.length + ' contas, ' + DB.categorias.length + ' categorias.' }));
 };
 
@@ -4484,6 +4690,45 @@ function configBackup(cont) {
 
 }
 
+// Digital: bloco da Segurança (só no celular). Preenchido depois, porque perguntar ao celular é assíncrono.
+function blocoDigital() {
+  const caixa = el('div', { class: 'ajustes bloco-digital' });
+  if (!MODO_CELULAR) return null;
+  (async () => {
+    const [suporta, reg] = await Promise.all([digitalSuportada(), lerDigital()]);
+    limpar(caixa).append(el('h4', { text: 'Entrar com a digital (este celular)' }));
+    if (reg) {
+      caixa.append(el('div', { class: 'linha-estado ok' }, icone('check', 18), el('span', { text: 'Ligada. Ao abrir o app, basta a digital; a senha continua valendo e é pedida uma vez a cada ' + DIGITAL_DIAS_SENHA + ' dias.' })),
+        el('div', { class: 'botoes-linha' }, el('button', { class: 'link-botao', type: 'button', text: 'Desligar a digital', onclick: async () => {
+          if (!(await confirmar({ titulo: 'Desligar a digital?', texto: 'O app volta a pedir só a senha. A chave "Organizador Financeiro" pode ficar no Gerenciador de Senhas do Google, sem problema (sozinha ela não abre nada), ou ser apagada lá.', botao: 'Desligar' }))) return;
+          await apagarDigital(); avisar('Digital desligada neste celular.'); renderizar();
+        } })));
+    } else if (!suporta) {
+      caixa.append(el('p', { class: 'nota', text: 'Este celular (ou este navegador) não oferece a digital para aplicativos da web. A entrada continua pela senha.' }));
+    } else {
+      caixa.append(el('p', { class: 'nota', text: 'Abra o cofre com a digital, sem digitar a senha. Quem confere a digital é o próprio Android; o app nunca vê a digital nem grava a senha.' }),
+        el('div', { class: 'botoes-linha' }, el('button', { class: 'botao primario', type: 'button', onclick: ligarDigital }, icone('digital', 18), ' Ligar a digital')));
+    }
+  })();
+  return caixa;
+}
+
+async function ligarDigital() {
+  const senha = await pedirSenha('Ligar a digital', 'Digite a senha mestra uma vez. Depois o celular vai pedir a digital (talvez duas vezes) e perguntar onde salvar a chave: escolha o Gerenciador de Senhas do Google.');
+  if (!senha) return;
+  try {
+    const reg = await criarDigital(SESSAO.chaves, senha);
+    await idbSet('digital', { ...reg, criadoEm: agoraISO(), ultimaSenha: agoraISO() });
+    avisar('Digital ligada. Na próxima vez que abrir o app, basta a digital.');
+    renderizar();
+  } catch (e) {
+    if (e && e.semPrf) avisar('Este celular não oferece o recurso seguro da digital para aplicativos da web. A entrada continua pela senha.', 'atencao');
+    else if (e && e.name === 'NotAllowedError') avisar('Digital cancelada. Nada foi alterado.', 'atencao');
+    else if (e && e.name === 'OperationError') { avisar('Senha incorreta.', 'erro'); registrarErroSenha(); }
+    else { console.error(e); avisar('Não foi possível ligar a digital: ' + (e && e.message ? e.message : 'erro desconhecido') + '.', 'erro'); }
+  }
+}
+
 // Aba "Ajustes": segurança e aparência
 function configAjustes(cont) {
   const selBloq = seletor([[1, '1 minuto'], [3, '3 minutos'], [5, '5 minutos'], [10, '10 minutos'], [15, '15 minutos'], [30, '30 minutos']].map(([v, r]) => [String(v), r]), String(DB.config.bloqueioMin));
@@ -4493,6 +4738,7 @@ function configAjustes(cont) {
     el('div', { class: 'botoes-linha' },
       el('button', { class: 'botao', type: 'button', onclick: abrirTrocarSenha }, icone('cadeado', 18), ' Trocar senha mestra'),
       el('button', { class: 'botao', type: 'button', onclick: abrirNovoCodigo }, icone('escudo', 18), ' Gerar novo código de recuperação')),
+    blocoDigital(),
     el('h4', { text: 'Como seus dados estão protegidos' }),
     el('ul', { class: 'lista-protecoes' },
       [nuvemDisponivel()
@@ -4880,6 +5126,10 @@ async function nuvemSincronizar({ silencioso = true } = {}) {
       NUVEM.erro = 'O arquivo do Drive é de outro cofre (outra senha). Nada foi apagado nem sobrescrito.';
       _nuvemEstado('erro');
       avisar(NUVEM.erro, 'erro');
+    } else if (e.versaoNova) {
+      NUVEM.erro = 'O computador já está numa versão mais nova do app. Feche e abra o app do celular (com internet) para ele se atualizar. Nada foi perdido.';
+      _nuvemEstado('erro');
+      if (!silencioso) avisar(NUVEM.erro, 'atencao');
     } else if (e.nuvem === 'entrar') {
       _nuvemEstado('entrar');
       if (!silencioso) nuvemPedirEntrada();
@@ -5148,8 +5398,8 @@ const TIPOS_REGISTRO = [['todos', 'Tudo'], ['entrada', 'Entradas'], ['saida', 'S
 function abrirRegistro({ tipo = 'todos', periodo, filtros = {}, ordem = 'data-desc', origem = null } = {}) {
   const r = ESTADO.registro;
   r.tipo = tipo;
-  r.periodo = periodo === 'tudo' ? { tipo: 'tudo', mes: (ESTADO.periodo.mes || mesAtual()) } : { ...(periodo || ESTADO.periodo) };
-  if (!r.periodo.mes) r.periodo.mes = mesAtual();
+  const base = periodo && periodo !== 'tudo' ? periodo : ESTADO.periodo;
+  r.periodo = completarPeriodo(periodo === 'tudo' ? { tipo: 'tudo', mes: ESTADO.periodo.mes || mesAtual() } : { tipo: base.tipo, mes: base.mes });
   r.filtros = { ...filtros };
   r.ordem = ordem;
   r.origem = origem;
@@ -5158,18 +5408,89 @@ function abrirRegistro({ tipo = 'todos', periodo, filtros = {}, ordem = 'data-de
   irPara('ajustes');
 }
 
-function mesesDoRegistro() { const p = ESTADO.registro.periodo; return p.tipo === 'tudo' ? null : mesesDoPeriodo(p); }
+// ---------- Período do registro ----------
+// Por mês de referência: mes, 3m, 6m, 12m, ano, meses (entre meses), anos (entre anos), tudo.
+// Por data: dia (um dia) e intervalo (entre datas), pela data do vencimento ou do pagamento (p.base).
+const TIPOS_PERIODO_REG = [['mes', 'Um mês'], ['3m', '3 meses'], ['6m', '6 meses'], ['12m', '12 meses'], ['ano', 'Um ano'], ['tudo', 'Tudo'],
+  ['dia', 'Um dia'], ['intervalo', 'Entre duas datas'], ['meses', 'Entre meses'], ['anos', 'Entre anos']];
+const periodoPorData = (p) => p.tipo === 'dia' || p.tipo === 'intervalo';
+const ordenarPar = (a, b) => (a <= b ? [a, b] : [b, a]);
+
+function completarPeriodo(p) {
+  const hoje = hojeISO(), mes = mesAtual();
+  if (!p.mes) p.mes = mes;
+  if (!p.dia) p.dia = hoje;
+  if (!p.de) p.de = mes + '-01';
+  if (!p.ate) p.ate = hoje;
+  if (!p.deMes) p.deMes = addMeses(mes, -2);
+  if (!p.ateMes) p.ateMes = mes;
+  if (!p.deAno) p.deAno = mes.slice(0, 4);
+  if (!p.ateAno) p.ateAno = mes.slice(0, 4);
+  if (p.base !== 'pagamento') p.base = 'vencimento';
+  return p;
+}
+
+// Devolve a função que diz se o lançamento está no período, e a chave de agrupamento (mês) de cada um.
+function filtroDoPeriodo(p) {
+  completarPeriodo(p);
+  const dataBase = (l) => (p.base === 'pagamento' ? (l.status === 'pago' ? dataEfetiva(l) : null) : l.data);
+  switch (p.tipo) {
+    case 'tudo': return { ok: () => true, mes: (l) => l.competencia };
+    case 'dia': return { ok: (l) => dataBase(l) === p.dia, mes: (l) => mesDe(dataBase(l)) };
+    case 'intervalo': { const [a, b] = ordenarPar(p.de, p.ate); return { ok: (l) => { const d = dataBase(l); return !!d && d >= a && d <= b; }, mes: (l) => mesDe(dataBase(l)) }; }
+    case 'meses': { const [a, b] = ordenarPar(p.deMes, p.ateMes); return { ok: (l) => l.competencia >= a && l.competencia <= b, mes: (l) => l.competencia }; }
+    case 'anos': { const [a, b] = ordenarPar(p.deAno, p.ateAno); return { ok: (l) => { const y = l.competencia.slice(0, 4); return y >= a && y <= b; }, mes: (l) => l.competencia }; }
+    default: { const set = new Set(mesesDoPeriodo(p)); return { ok: (l) => set.has(l.competencia), mes: (l) => l.competencia }; }
+  }
+}
+
+function anosDisponiveis() {
+  let min = Number(mesAtual().slice(0, 4)), max = min + 1;
+  for (const l of DB.lancamentos) { const y = Number(l.competencia.slice(0, 4)); if (y < min) min = y; if (y > max) max = y; }
+  const r = []; for (let y = max; y >= min; y--) r.push(String(y));
+  return r;
+}
+
+function barraPeriodoRegistro(aoMudar) {
+  const p = completarPeriodo(ESTADO.registro.periodo);
+  const mudar = (fn) => (e) => { fn(e && e.target ? e.target.value : e); aoMudar(); };
+  const selTipo = seletor(TIPOS_PERIODO_REG, p.tipo, { 'aria-label': 'Tipo de período', class: 'sel-periodo' });
+  selTipo.addEventListener('change', mudar((v) => { p.tipo = v; }));
+  const inp = (tipo, valor, aoMudarV, rotulo) => { const i = el('input', { type: tipo, value: valor, 'aria-label': rotulo }); i.addEventListener('change', mudar((v) => { if (v) aoMudarV(v); })); return i; };
+  const selAno = (valor, aoMudarV, rotulo) => { const s = seletor(anosDisponiveis().map((y) => [y, y]), valor, { 'aria-label': rotulo }); s.addEventListener('change', mudar(aoMudarV)); return s; };
+  const passo = p.tipo === 'ano' ? 12 : p.tipo === 'mes' ? 1 : { '3m': 3, '6m': 6, '12m': 12 }[p.tipo] || 1;
+  const setas = (rotulo) => el('div', { class: 'navegador-mes' },
+    el('button', { class: 'botao-icone', type: 'button', 'aria-label': 'Período anterior', onclick: () => { p.mes = addMeses(p.mes, -passo); aoMudar(); } }, icone('esquerda', 18)),
+    el('strong', { class: 'periodo-rotulo', text: rotulo }),
+    el('button', { class: 'botao-icone', type: 'button', 'aria-label': 'Próximo período', onclick: () => { p.mes = addMeses(p.mes, passo); aoMudar(); } }, icone('direita', 18)));
+  const base = () => { const s = seletor([['vencimento', 'pela data do vencimento'], ['pagamento', 'pela data do pagamento (só os pagos)']], p.base, { 'aria-label': 'Qual data considerar' }); s.addEventListener('change', mudar((v) => { p.base = v; })); return s; };
+  const rot = (texto, controle) => el('label', { class: 'rotulo-inline' }, texto, controle);
+  let detalhe;
+  switch (p.tipo) {
+    case 'mes': detalhe = [setas(capitalizar(nomeMes(p.mes))), inp('month', p.mes, (v) => { p.mes = v; }, 'Escolher o mês')]; break;
+    case '3m': case '6m': case '12m': detalhe = [setas(rotuloPeriodo(p)), rot('até ', inp('month', p.mes, (v) => { p.mes = v; }, 'Último mês'))]; break;
+    case 'ano': detalhe = [setas('Ano de ' + p.mes.slice(0, 4)), selAno(p.mes.slice(0, 4), (v) => { p.mes = v + p.mes.slice(4); }, 'Escolher o ano')]; break;
+    case 'tudo': detalhe = [el('strong', { class: 'periodo-rotulo', text: 'Todos os meses' })]; break;
+    case 'dia': detalhe = [inp('date', p.dia, (v) => { p.dia = v; }, 'Dia'), base()]; break;
+    case 'intervalo': detalhe = [rot('de ', inp('date', p.de, (v) => { p.de = v; }, 'Data inicial')), rot('até ', inp('date', p.ate, (v) => { p.ate = v; }, 'Data final')), base()]; break;
+    case 'meses': detalhe = [rot('de ', inp('month', p.deMes, (v) => { p.deMes = v; }, 'Mês inicial')), rot('até ', inp('month', p.ateMes, (v) => { p.ateMes = v; }, 'Mês final'))]; break;
+    case 'anos': detalhe = [rot('de ', selAno(p.deAno, (v) => { p.deAno = v; }, 'Ano inicial')), rot('até ', selAno(p.ateAno, (v) => { p.ateAno = v; }, 'Ano final'))]; break;
+    default: detalhe = [];
+  }
+  const voltarHoje = ['mes', '3m', '6m', '12m', 'ano'].includes(p.tipo) && p.mes !== mesAtual()
+    ? el('button', { class: 'link-botao', type: 'button', text: 'Voltar para hoje', onclick: () => { p.mes = mesAtual(); aoMudar(); } }) : null;
+  return el('div', { class: 'barra-filtros barra-periodo-reg' }, rot('Período ', selTipo), ...detalhe, voltarHoje);
+}
 
 function filtrarRegistro() {
   const r = ESTADO.registro, f = r.filtros;
-  const meses = mesesDoRegistro();
-  const set = meses ? new Set(meses) : null;
+  const noPeriodo = filtroDoPeriodo(r.periodo).ok;
   const busca = normalizar(f.busca);
   const hoje = hojeISO();
   return DB.lancamentos.filter((l) => {
     if (r.tipo !== 'todos' && l.tipo !== r.tipo) return false;
     if (!noEscopo(l)) return false;
-    if (set && !set.has(l.competencia)) return false;
+    if (!noPeriodo(l)) return false;
     if (f.categoriaId && (l.categoriaId || '') !== f.categoriaId) return false;
     if (f.contaId && l.contaId !== f.contaId && l.contaDestinoId !== f.contaId) return false;
     if (f.status === 'misturado') { if (!ehMisturado(l)) return false; }
@@ -5240,7 +5561,7 @@ function cabecalhoRegistro() {
 
 function telaRegistro(cont) {
   const r = ESTADO.registro, f = r.filtros;
-  if (!r.periodo.mes) r.periodo.mes = mesAtual();
+  completarPeriodo(r.periodo);
   const itens = ordenarRegistro(filtrarRegistro());
   const tot = totaisRegistro(itens);
 
@@ -5252,7 +5573,7 @@ function telaRegistro(cont) {
   // Tipo e período
   cont.appendChild(el('div', { class: 'barra-filtros' },
     alternador(TIPOS_REGISTRO, r.tipo, (v) => { r.tipo = v; if (v === 'transferencia') delete f.categoriaId; r.limite = 400; renderizar(); })));
-  cont.appendChild(barraPeriodo(() => { r.limite = 400; renderizar(); }, r.periodo, true));
+  cont.appendChild(barraPeriodoRegistro(() => { r.limite = 400; renderizar(); }));
 
   // Filtros
   const busca = el('input', { type: 'search', placeholder: 'Buscar por nome, pessoa, valor…', value: f.busca || '', class: 'busca busca-registro' });
@@ -5299,12 +5620,13 @@ function telaRegistro(cont) {
     lista.appendChild(el('div', { class: 'reg-mes' }, el('span', { text: 'Do último lançado ou editado para o mais antigo' })));
     for (const l of visiveis) lista.appendChild(linhaRegistro(l));
   } else {
-    const grupos = agrupar(visiveis, (l) => l.competencia);
+    const chaveMes = filtroDoPeriodo(r.periodo).mes;
+    const grupos = agrupar(visiveis, chaveMes);
     const chaves = Array.from(grupos.keys()).sort();
     if (r.ordem !== 'data-asc') chaves.reverse();
     for (const mes of chaves) {
       const ls = grupos.get(mes);
-      const t = totaisRegistro(itens.filter((l) => l.competencia === mes));
+      const t = totaisRegistro(itens.filter((l) => chaveMes(l) === mes));
       const partes = [];
       if (t.ent) partes.push(el('span', { class: 'cor-texto-entrada valor', text: '+ ' + moeda(t.ent) }));
       if (t.sai) partes.push(el('span', { class: 'valor', text: '− ' + moeda(t.sai) }));
@@ -5320,7 +5642,328 @@ function telaRegistro(cont) {
   if (itens.length > r.limite) {
     cont.appendChild(el('button', { class: 'botao largo', type: 'button', text: 'Mostrar mais (' + (itens.length - r.limite) + ' restantes)', onclick: () => { r.limite += 400; renderizar(); } }));
   }
-  cont.appendChild(el('p', { class: 'nota', text: 'Organizado pelo mês de referência: compra no cartão aparece no mês da fatura; o resto, no mês do vencimento. Clique numa linha para ver ou editar.' }));
+  cont.appendChild(el('p', { class: 'nota', text: periodoPorData(r.periodo)
+    ? 'Filtrado ' + (r.periodo.base === 'pagamento' ? 'pela data do pagamento (só os já pagos ou recebidos)' : 'pela data do vencimento') + '. Clique numa linha para ver ou editar.'
+    : 'Organizado pelo mês de referência: compra no cartão aparece no mês da fatura; o resto, no mês do vencimento. Clique numa linha para ver ou editar.' }));
+}
+
+// ===================== 17 - Importar extrato (Configurações › Importar extrato) =====================
+// Três formatos, sem internet e sem IA dentro do app:
+//  - OFX: o extrato que o internet banking exporta (BB, Sicoob, Itaú…). Valores exatos do banco.
+//  - CSV: planilha do banco (colunas de data, descrição e valor, ou débito/crédito).
+//  - JSON "organizador-importacao": o arquivo que o Claude prepara a partir de um PDF ou print
+//    (ver _projeto/IMPORTACAO-POR-IA.md), com saldo inicial e final para conferir a soma.
+// Nada é gravado sem a tela de conferência: cada linha pode ser desmarcada, trocada de tipo e de categoria;
+// linhas que parecem já lançadas vêm desmarcadas; o código da linha do banco (idExterno) evita importar duas vezes.
+
+// ---------- Leitura dos arquivos (funções puras, testadas em testes-nucleo.mjs) ----------
+function decodificarTexto(bytes) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { return new TextDecoder('windows-1252').decode(bytes); }
+}
+
+function centavosDeTexto(t) {
+  let s = String(t == null ? '' : t).trim().replace(/R\$|\s/g, '');
+  if (!s) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  if (/[-−]$/.test(s)) { neg = true; s = s.slice(0, -1); }
+  if (/^[-−]/.test(s)) { neg = !neg; s = s.slice(1); }
+  if (/[DC]$/i.test(s)) { if (/D$/i.test(s)) neg = true; s = s.slice(0, -1); }
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');   // 1.234,56
+  else s = s.replace(/,/g, '');                                           // 1,234.56 ou 1234.56
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const v = Math.round(parseFloat(s) * 100);
+  return neg ? -v : v;
+}
+
+function dataDeTexto(t) {
+  const s = String(t || '').trim();
+  let m = s.match(/^(\d{4})-?(\d{2})-?(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+  if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); }
+  return null;
+}
+
+function lerOFX(texto) {
+  const tag = (bloco, nome) => { const m = bloco.match(new RegExp('<' + nome + '>([^<\\r\\n]*)', 'i')); return m ? m[1].trim() : ''; };
+  const blocos = texto.split(/<STMTTRN>/i).slice(1).map((b) => b.split(/<\/STMTTRN>/i)[0]);
+  const itens = [];
+  for (const b of blocos) {
+    const data = dataDeTexto(tag(b, 'DTPOSTED'));
+    const valor = centavosDeTexto(tag(b, 'TRNAMT').replace(',', '.'));
+    if (!data || !valor) continue;
+    const nome = tag(b, 'NAME'), memo = tag(b, 'MEMO');
+    const descricao = [nome, memo && memo !== nome ? memo : ''].filter(Boolean).join(' - ') || tag(b, 'TRNTYPE');
+    itens.push({ data, valor, descricao, idExterno: tag(b, 'FITID') || null });
+  }
+  const saldo = texto.match(/<LEDGERBAL>[\s\S]*?<BALAMT>([^<\r\n]*)[\s\S]*?<DTASOF>([^<\r\n]*)/i);
+  return {
+    formato: 'OFX', cartao: /<CCSTMTRS>/i.test(texto), itens,
+    conta: [tag(texto, 'BANKID') && 'banco ' + tag(texto, 'BANKID'), tag(texto, 'ACCTID') && 'conta ' + tag(texto, 'ACCTID')].filter(Boolean).join(', '),
+    saldoFinal: saldo ? { valor: centavosDeTexto(saldo[1].replace(',', '.')), data: dataDeTexto(saldo[2]) } : null,
+  };
+}
+
+function dividirCSV(linha, sep) {
+  const r = []; let cur = '', aspas = false;
+  for (let i = 0; i < linha.length; i++) {
+    const ch = linha[i];
+    if (aspas) { if (ch === '"') { if (linha[i + 1] === '"') { cur += '"'; i++; } else aspas = false; } else cur += ch; }
+    else if (ch === '"') aspas = true;
+    else if (ch === sep) { r.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  r.push(cur);
+  return r.map((x) => x.trim());
+}
+
+function lerCSV(texto) {
+  const linhas = texto.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
+  if (linhas.length < 2) throw new Error('A planilha está vazia.');
+  // o cabeçalho pode não estar na primeira linha (alguns bancos põem o nome da conta antes);
+  // o separador (; , ou tabulação) é o que faz o cabeçalho aparecer
+  let iCab = -1, cab = [], sep = ';';
+  for (let i = 0; i < Math.min(linhas.length, 15) && iCab < 0; i++) {
+    for (const s of [';', ',', '\t']) {
+      const c = dividirCSV(linhas[i], s).map(normalizar);
+      if (c.length > 1 && c.some((x) => /^data|^date|^dt/.test(x)) && c.some((x) => /valor|value|quantia|montante|debito|credito|entrada|saida/.test(x))) { iCab = i; cab = c; sep = s; break; }
+    }
+  }
+  if (iCab < 0) throw new Error('Não reconheci as colunas desta planilha (data, descrição e valor). Use o arquivo OFX do banco ou peça ao Claude para converter.');
+  const acha = (re) => cab.findIndex((x) => re.test(x));
+  const cData = acha(/^data|^date|^dt/);
+  const cDesc = acha(/descri|histor|lancamento|memo|estabelec|detalhe|titulo/);
+  const cValor = acha(/^valor|value|quantia|montante/);
+  const cDeb = acha(/debito|saida/), cCred = acha(/credito|entrada/);
+  const itens = [];
+  for (const l of linhas.slice(iCab + 1)) {
+    const c = dividirCSV(l, sep);
+    const data = dataDeTexto(c[cData]);
+    let valor = cValor >= 0 ? centavosDeTexto(c[cValor]) : null;
+    if (valor == null && (cDeb >= 0 || cCred >= 0)) {
+      const d = cDeb >= 0 ? centavosDeTexto(c[cDeb]) : null, cr = cCred >= 0 ? centavosDeTexto(c[cCred]) : null;
+      valor = cr ? Math.abs(cr) : d ? -Math.abs(d) : null;
+    }
+    if (!data || !valor) continue; // linhas de saldo, totais e em branco ficam de fora
+    const descricao = (cDesc >= 0 ? c[cDesc] : '') || 'Sem descrição';
+    if (/^saldo/i.test(normalizar(descricao))) continue;
+    itens.push({ data, valor, descricao, idExterno: null });
+  }
+  if (!itens.length) throw new Error('Não encontrei lançamentos nesta planilha.');
+  return { formato: 'CSV', cartao: false, itens, conta: '', saldoFinal: null };
+}
+
+function lerJSONImportacao(o) {
+  if (!o || o.formato !== 'organizador-importacao' || !Array.isArray(o.itens)) throw new Error('Este arquivo não é uma importação do Organizador.');
+  const itens = o.itens.map((x) => ({
+    data: dataDeTexto(x.data), valor: Number.isInteger(x.valor) ? x.valor : null, descricao: vTexto(x.descricao, 120) || 'Sem descrição',
+    idExterno: x.idExterno ? vTexto(String(x.idExterno), 120) : null, categoria: vTexto(x.categoria, 80), pessoa: vTexto(x.pessoa, 100),
+    obs: vTexto(x.obs, 500), duvida: x.duvida === true,
+  })).filter((x) => x.data && x.valor);
+  const cent = (v) => (Number.isInteger(v) ? v : null);
+  return { formato: 'JSON', cartao: o.cartao === true, itens, conta: vTexto(o.origem, 200),
+    saldoInicial: cent(o.saldoInicial), saldoFinal: cent(o.saldoFinal) != null ? { valor: o.saldoFinal, data: null } : null };
+}
+
+function lerArquivoExtrato(nome, bytes) {
+  const texto = decodificarTexto(bytes);
+  const t = texto.trim();
+  if (t.startsWith('{')) { let o; try { o = JSON.parse(t); } catch { throw new Error('Arquivo JSON danificado.'); } return lerJSONImportacao(o); }
+  if (/OFXHEADER|<OFX>/i.test(t)) return lerOFX(texto);
+  return lerCSV(texto);
+}
+
+// ---------- Sugestão de categoria (histórico dele primeiro, depois palavras comuns) ----------
+const PALAVRAS_VAZIAS = new Set(['pix', 'enviado', 'recebido', 'env', 'rec', 'compra', 'cartao', 'debito', 'credito', 'deb', 'cred', 'pagamento', 'pgto', 'pag',
+  'transferencia', 'transf', 'ted', 'doc', 'tev', 'boleto', 'automatico', 'aut', 'visa', 'master', 'mastercard', 'elo', 'internet', 'banking', 'de', 'da', 'do',
+  'das', 'dos', 'para', 'em', 'com', 'e', 'a', 'o', 'no', 'na', 'ltda', 'me', 'sa', 'eireli', 'epp', 'parc', 'parcela']);
+function chaveDescricao(desc) {
+  const p = normalizar(desc).replace(/[^a-z ]/g, ' ').split(/\s+/).filter((w) => w.length > 1 && !PALAVRAS_VAZIAS.has(w));
+  return p.slice(0, 2).join(' ');
+}
+const REGRAS_CATEGORIA = [
+  [/posto|combust|gasolina|ipiranga|shell|petrobras|br mania|uber|99 ?app|99pop|taxi|estacion|pedagio|sem parar|conectcar/, 'c-transporte'],
+  [/farmac|drogar|droga raia|drogasil|pague menos|unimed|hapvida|amil|bradesco saude|hospital|clinic|laborat|odonto/, 'c-saude'],
+  [/supermerc|mercado|atacad|assai|carrefour|extra hiper|pao de acucar|hortifruti|acougue/, 'c-mercado'],
+  [/ifood|rappi|restaur|lanchon|padaria|pizz|burger|mc ?donald|bar e|cafe/, 'c-restaurantes'],
+  [/tarifa|juros|iof|anuidade|pacote de servic|cesta de servic|manut.* conta/, 'c-tarifas'],
+  [/netflix|spotify|prime video|amazon prime|disney|globoplay|youtube|google one|icloud|apple\.com|microsoft/, 'c-assinaturas'],
+  [/energisa|cpfl|enel|elektro|sabesp|saneamento|agua e esgoto|vivo|claro|tim |oi fibra|net servic|sky/, 'c-contas-casa'],
+  [/\boab\b|aasp|caasp/, 'c-oab'],
+  [/custas|tjsp|tribunal|guia de recolh|gare|fundo especial|diligencia/, 'c-custas'],
+  [/\bdas\b|simples nacional|\binss\b|darf|receita federal|carne.?leao|\biss\b/, 'c-impostos-e'],
+  [/iptu|detran|ipva|licenciamento/, 'c-impostos-p'],
+  [/aluguel|condominio/, 'c-moradia'],
+];
+function sugerirCategoria(desc, tipo) {
+  const k = chaveDescricao(desc);
+  if (k) {
+    const cont = new Map();
+    for (const l of DB.lancamentos) if (l.tipo === tipo && l.categoriaId && chaveDescricao(l.descricao) === k) cont.set(l.categoriaId, (cont.get(l.categoriaId) || 0) + 1);
+    const melhor = [...cont.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (melhor && categoriaPorId(melhor[0])) return melhor[0];
+  }
+  if (tipo === 'saida') {
+    const n = normalizar(desc);
+    for (const [re, id] of REGRAS_CATEGORIA) if (re.test(n) && categoriaPorId(id)) return id;
+  }
+  return null;
+}
+
+// Parece já lançado? Mesmo código do banco, ou mesma conta, tipo e valor com data até 3 dias de diferença.
+function acharDuplicado(linha, contaId) {
+  const tipo = linha.valor < 0 ? 'saida' : 'entrada';
+  const v = Math.abs(linha.valor);
+  return DB.lancamentos.find((l) => (linha.idExterno && l.idExterno === linha.idExterno && l.contaId === contaId)
+    || (l.contaId === contaId && l.tipo === tipo && l.valor === v && [l.data, l.pagoEm].some((d) => d && Math.abs(diffDias(d, linha.data)) <= 3))) || null;
+}
+
+// ---------- Tela ----------
+ESTADO.importacao = null; // { nome, lido, contaId, linhas: [...] }
+
+function prepararLinhas(imp) {
+  const conta = contaPorId(imp.contaId);
+  const cartao_ = !!conta && conta.tipo === 'cartao';
+  imp.linhas = imp.lido.itens.map((x) => {
+    const tipo = x.valor < 0 ? 'saida' : 'entrada';
+    let acao = tipo;
+    // no cartão, valor positivo é pagamento da fatura ou estorno: o pagamento se lança com "Pagar fatura"
+    if (cartao_ && x.valor > 0) acao = 'ignorar';
+    const catNome = x.categoria ? DB.categorias.find((c) => c.tipo === tipo && normalizar(c.nome) === normalizar(x.categoria)) : null;
+    const dup = acharDuplicado(x, imp.contaId);
+    return { ...x, acao, sel: !dup && acao !== 'ignorar', dup, categoriaId: catNome ? catNome.id : sugerirCategoria(x.descricao, tipo), contaDestinoId: '' };
+  });
+}
+
+async function escolherExtrato() {
+  const arq = await escolherArquivoPorInput(MODO_CELULAR ? '' : '.ofx,.qfx,.csv,.txt,.json');
+  if (!arq) return;
+  if (arq.size > 5 * 1024 * 1024) { avisar('Arquivo grande demais para um extrato.', 'erro'); return; }
+  let lido;
+  try { lido = lerArquivoExtrato(arq.name, new Uint8Array(await arq.arrayBuffer())); } catch (e) { avisar(e.message || 'Não consegui ler este arquivo.', 'erro'); return; }
+  if (!lido.itens.length) { avisar('Não encontrei lançamentos neste arquivo.', 'atencao'); return; }
+  const contaPadrao = (DB.contas.find((c) => !c.arquivada && (lido.cartao ? c.tipo === 'cartao' : c.tipo !== 'cartao')) || DB.contas[0]).id;
+  ESTADO.importacao = { nome: arq.name, lido, contaId: contaPadrao };
+  prepararLinhas(ESTADO.importacao);
+  renderizar(true);
+}
+
+function telaImportar(cont) {
+  const imp = ESTADO.importacao;
+  if (!imp) {
+    cont.appendChild(cartao('Importar extrato do banco', 'Os lançamentos do extrato entram de uma vez; nada é gravado sem a sua conferência.', el('div', { class: 'cartao-corpo ajustes' },
+      el('ol', { class: 'passos-sinc' },
+        el('li', null, el('strong', { text: 'Arquivo do banco (recomendado): ' }), el('span', { text: 'no internet banking, baixe o extrato em OFX (às vezes chamado "Money" ou "Quicken") ou CSV/Excel. Os valores vêm exatos do banco.' })),
+        el('li', null, el('strong', { text: 'PDF, fatura do cartão ou print: ' }), el('span', { text: 'coloque o arquivo na pasta "Extratos para lançar" (dentro de Documentos › Organizador Financeiro) e peça ao Claude: "converta o extrato para importar". Ele devolve um arquivo .json, que se importa aqui.' })),
+        el('li', null, el('strong', { text: 'Conferência: ' }), el('span', { text: 'o app mostra cada linha com a categoria sugerida (aprende com os seus lançamentos), deixa desmarcado o que parece já lançado e confere a soma com o saldo do extrato.' }))),
+      el('div', { class: 'botoes-linha' }, el('button', { class: 'botao primario', type: 'button', onclick: escolherExtrato }, icone('enviar', 18), ' Escolher o arquivo do extrato')),
+      el('p', { class: 'nota', text: 'Depois de importar, apague o arquivo do extrato do computador ou do celular: ele não é criptografado.' }))));
+    return;
+  }
+
+  const conta = contaPorId(imp.contaId);
+  const cartao_ = !!conta && conta.tipo === 'cartao';
+  const selConta = el('select', { 'aria-label': 'Conta' }, opcoesContas(() => true, imp.contaId));
+  selConta.addEventListener('change', () => { imp.contaId = selConta.value; prepararLinhas(imp); renderizar(); });
+  const marcadas = imp.linhas.filter((l) => l.sel && l.acao !== 'ignorar');
+  const ent = somar(marcadas.filter((l) => l.acao === 'entrada'), (l) => Math.abs(l.valor));
+  const sai = somar(marcadas.filter((l) => l.acao === 'saida'), (l) => Math.abs(l.valor));
+  const datas = imp.lido.itens.map((x) => x.data).sort();
+  const soma = somar(imp.lido.itens, (x) => x.valor);
+
+  const conferencias = [];
+  if (imp.lido.saldoInicial != null && imp.lido.saldoFinal && imp.lido.saldoFinal.valor != null) {
+    const bate = imp.lido.saldoInicial + soma === imp.lido.saldoFinal.valor;
+    conferencias.push(el('div', { class: 'linha-estado ' + (bate ? 'ok' : 'atencao') }, icone(bate ? 'check' : 'alerta', 18),
+      el('span', { text: bate ? 'Conferido: saldo inicial ' + moeda(imp.lido.saldoInicial) + ' + lançamentos ' + moeda(soma) + ' = saldo final ' + moeda(imp.lido.saldoFinal.valor) + ', igual ao extrato.'
+        : 'A soma NÃO bate com o extrato: saldo inicial ' + moeda(imp.lido.saldoInicial) + ' + lançamentos ' + moeda(soma) + ' = ' + moeda(imp.lido.saldoInicial + soma) + ', mas o extrato diz ' + moeda(imp.lido.saldoFinal.valor) + '. Confira antes de importar.' })));
+  } else if (imp.lido.saldoFinal && imp.lido.saldoFinal.valor != null) {
+    conferencias.push(el('p', { class: 'nota', text: 'Saldo final no extrato' + (imp.lido.saldoFinal.data ? ' em ' + dataBR(imp.lido.saldoFinal.data) : '') + ': ' + moeda(imp.lido.saldoFinal.valor) + '. Depois de importar, compare com o saldo desta conta em Contas e cartões.' }));
+  }
+  const nDup = imp.linhas.filter((l) => l.dup).length, nDuv = imp.linhas.filter((l) => l.duvida).length;
+
+  cont.appendChild(cartao('Conferir o extrato', imp.nome + ' · ' + imp.lido.formato + (imp.lido.conta ? ' · ' + imp.lido.conta : '') + ' · ' + imp.linhas.length + ' linhas de ' + dataBR(datas[0]) + ' a ' + dataBR(datas[datas.length - 1]),
+    el('div', { class: 'cartao-corpo ajustes' },
+      campo('Lançar na conta', selConta, cartao_ ? 'Cartão: as compras entram nas faturas certas. Pagamento da fatura e estornos vêm como "Não importar" (o pagamento se lança em "Pagar fatura").' : null),
+      ...conferencias,
+      nDup ? el('p', { class: 'nota', text: nDup + (nDup === 1 ? ' linha parece já lançada e veio desmarcada.' : ' linhas parecem já lançadas e vieram desmarcadas.') + ' Marque se não for o caso.' }) : null,
+      nDuv ? el('p', { class: 'alerta-texto', text: nDuv + (nDuv === 1 ? ' linha foi marcada' : ' linhas foram marcadas') + ' com dúvida na leitura do PDF: confira com o extrato.' }) : null,
+      el('div', { class: 'botoes-linha' },
+        el('button', { class: 'link-botao', type: 'button', text: 'Marcar todas', onclick: () => { for (const l of imp.linhas) if (l.acao !== 'ignorar') l.sel = true; renderizar(); } }),
+        el('button', { class: 'link-botao', type: 'button', text: 'Desmarcar todas', onclick: () => { for (const l of imp.linhas) l.sel = false; renderizar(); } })))));
+
+  const lista = el('div', { class: 'cartao imp-lista' });
+  imp.linhas.forEach((l) => {
+    const chk = el('input', { type: 'checkbox', checked: l.sel && l.acao !== 'ignorar', disabled: l.acao === 'ignorar', 'aria-label': 'Importar esta linha' });
+    chk.addEventListener('change', () => { l.sel = chk.checked; renderizar(); });
+    const desc = el('input', { type: 'text', value: l.descricao, maxlength: 120, 'aria-label': 'Descrição' });
+    desc.addEventListener('change', () => { l.descricao = vTexto(desc.value, 120) || l.descricao; });
+    const tiposPossiveis = l.valor < 0 ? [['saida', 'Saída'], ['transferencia', 'Transferência (saiu para outra conta minha)'], ['ignorar', 'Não importar']]
+      : [['entrada', 'Entrada'], ['transferencia', 'Transferência (veio de outra conta minha)'], ['ignorar', 'Não importar']];
+    const selAcao = seletor(tiposPossiveis, l.acao, { 'aria-label': 'Tipo' });
+    selAcao.addEventListener('change', () => { l.acao = selAcao.value; l.sel = l.acao !== 'ignorar'; if (l.acao === 'entrada' || l.acao === 'saida') l.categoriaId = l.categoriaId || sugerirCategoria(l.descricao, l.acao); renderizar(); });
+    let segundo = null;
+    if (l.acao === 'entrada' || l.acao === 'saida') {
+      segundo = el('select', { 'aria-label': 'Categoria' }, opcoesCategorias(l.acao, conta ? conta.escopo : 'P', l.categoriaId).filter((o) => !(o.value === '__nova')));
+      segundo.addEventListener('change', () => { l.categoriaId = segundo.value || null; });
+    } else if (l.acao === 'transferencia') {
+      segundo = el('select', { 'aria-label': 'Outra conta' }, [el('option', { value: '', text: 'Qual a outra conta?' }), ...opcoesContas((c) => c.id !== imp.contaId && c.tipo !== 'cartao', l.contaDestinoId)]);
+      segundo.addEventListener('change', () => { l.contaDestinoId = segundo.value; });
+    }
+    lista.appendChild(el('div', { class: ['imp-linha', l.sel && l.acao !== 'ignorar' ? '' : 'desmarcada', l.duvida ? 'duvida' : ''] },
+      chk,
+      el('span', { class: 'imp-data', text: dataBR(l.data).slice(0, 5) }),
+      el('div', { class: 'imp-desc' }, desc,
+        l.dup ? el('span', { class: 'etiqueta atraso', title: 'Parecido com: ' + (l.dup.descricao || '') + ' · ' + dataBR(l.dup.data) + ' · ' + moeda(l.dup.valor), text: 'já lançado?' }) : null,
+        l.duvida ? el('span', { class: 'etiqueta mistura', text: 'conferir' }) : null),
+      selAcao, segundo || el('span'),
+      el('span', { class: ['imp-valor', 'valor', l.valor > 0 ? 'cor-texto-entrada' : ''], text: (l.valor > 0 ? '+ ' : '− ') + moeda(Math.abs(l.valor)) })));
+  });
+  cont.appendChild(lista);
+
+  cont.appendChild(el('div', { class: 'barra-filtros imp-rodape' },
+    el('span', { class: 'valor', text: marcadas.length + (marcadas.length === 1 ? ' lançamento' : ' lançamentos') + ' · entradas + ' + moeda(ent) + ' · saídas − ' + moeda(sai) }),
+    el('div', { class: 'espaco' }),
+    el('button', { class: 'botao', type: 'button', text: 'Cancelar', onclick: () => { ESTADO.importacao = null; renderizar(true); } }),
+    el('button', { class: 'botao primario', type: 'button', disabled: !marcadas.length, onclick: confirmarImportacao }, icone('check', 18), ' Importar ' + marcadas.length)));
+}
+
+function confirmarImportacao() {
+  const imp = ESTADO.importacao;
+  const conta = contaPorId(imp.contaId);
+  const cartao_ = !!conta && conta.tipo === 'cartao';
+  const marcadas = imp.linhas.filter((l) => l.sel && l.acao !== 'ignorar');
+  const semDestino = marcadas.filter((l) => l.acao === 'transferencia' && !l.contaDestinoId);
+  if (semDestino.length) { avisar('Escolha a outra conta das transferências (' + semDestino.length + ').', 'atencao'); return; }
+  const novos = [];
+  for (const l of marcadas) {
+    const x = { id: uid(), tipo: l.acao, descricao: l.descricao, valor: Math.abs(l.valor), data: l.data, status: 'pago', forma: '', obs: [l.obs, 'Importado do extrato (' + imp.lido.formato + ').'].filter(Boolean).join('\n'), pessoa: l.pessoa || '' };
+    if (l.idExterno) x.idExterno = l.idExterno;
+    if (l.acao === 'transferencia') {
+      // saiu desta conta para outra, ou veio de outra para esta
+      if (l.valor < 0) { x.contaId = imp.contaId; x.contaDestinoId = l.contaDestinoId; } else { x.contaId = l.contaDestinoId; x.contaDestinoId = imp.contaId; }
+      x.escopo = conta ? conta.escopo : 'P';
+      x.pagoEm = l.data;
+      x.competencia = mesDe(l.data);
+    } else {
+      x.contaId = imp.contaId;
+      x.categoriaId = l.categoriaId || null;
+      const cat = categoriaPorId(x.categoriaId);
+      x.escopo = cat && (cat.escopo === 'P' || cat.escopo === 'E') ? cat.escopo : conta ? conta.escopo : 'P';
+      if (!cartao_) x.pagoEm = l.data;
+      recalcularCompetencia(x);
+    }
+    novos.push(carimbar(x, true));
+  }
+  DB.lancamentos.push(...novos);
+  const datas = marcadas.map((l) => l.data).sort();
+  ESTADO.importacao = null;
+  mudou(true);
+  avisar(novos.length + (novos.length === 1 ? ' lançamento importado.' : ' lançamentos importados.') + ' Lembre de apagar o arquivo do extrato.');
+  abrirRegistro({ tipo: 'todos', periodo: { tipo: 'mes', mes: mesDe(datas[0]) }, filtros: { contaId: imp.contaId }, ordem: 'data-asc' });
+  const p = ESTADO.registro.periodo; p.tipo = 'intervalo'; p.de = datas[0]; p.ate = datas[datas.length - 1]; p.base = 'vencimento';
+  renderizar(true);
 }
 
 // ===================== 99 - Partida =====================

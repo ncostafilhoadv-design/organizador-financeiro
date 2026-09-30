@@ -1,7 +1,7 @@
 // Organizador Financeiro — service worker da versão do celular.
 // Guarda só os arquivos do aplicativo para ele abrir sem internet. Os dados NÃO passam por aqui:
 // ficam cifrados no IndexedDB do próprio celular.
-const VERSAO = 'f40f720e0ac4';
+const VERSAO = '97b029e422c3';
 const CACHE = 'organizador-' + VERSAO;
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icone-192.png', './icone-512.png', './icone-mascara-512.png'];
 
