@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UvLhAuezp8yW4vNyE6a9JHyv/FgETlqY8adKkydGB+s='; style-src 'sha256-Z0LPBcpxQAJueBebl7EWerpsUfpvqu3bR5oO+Um1iio='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k6jlqjWgEjcwtq0y0GXsGafCJXgassbG6qar/z2KbRA='; style-src 'sha256-Z0LPBcpxQAJueBebl7EWerpsUfpvqu3bR5oO+Um1iio='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -2547,7 +2547,7 @@ function telaBoasVindas() {
   if (MODO_CELULAR) {
     telaAcesso(
       el('h1', { text: 'Organizador no celular' }),
-      el('p', { class: 'acesso-texto', text: 'Para usar os mesmos dados do computador, abra o arquivo do cofre que está no seu Google Drive: Meu Drive › Organizador Financeiro › financas.cofre. A senha é a mesma do computador.' }),
+      el('p', { class: 'acesso-texto', text: 'Para usar os mesmos dados do computador, abra o arquivo do cofre que está no seu Google Drive: Meu Drive › Organizador Financeiro - dados › financas.cofre. A senha é a mesma do computador.' }),
       el('div', { class: 'acesso-botoes' },
         el('button', { class: 'botao primario grande', type: 'button', onclick: () => abrirArquivoDeCofre(null) }, icone('arquivo', 18), ' Abrir o cofre do computador'),
         nuvemDisponivel() ? el('button', { class: 'botao grande', type: 'button', onclick: nuvemBaixarCofreNovo }, icone('baixar', 18), ' Baixar do Google Drive (sincronização já ligada antes)') : null,
@@ -2634,7 +2634,7 @@ function telaArquivoInicial() {
   telaAcesso(
     el('h1', { text: 'Ligar o cofre ao Google Drive' }),
     el('p', { class: 'acesso-texto', text: 'Além de ficar no navegador, o cofre é gravado sozinho, criptografado, numa pasta do Google Drive a cada alteração. É por ela também que o celular troca dados com o computador.' }),
-    el('p', { class: 'alerta-texto', text: 'Na janela que vai abrir, escolha: Google Drive (G:) › Meu Drive › Organizador Financeiro, e clique em "Selecionar pasta". Depois confirme "Permitir" / "Salvar alterações".' }),
+    el('p', { class: 'alerta-texto', text: 'Na janela que vai abrir, escolha: Google Drive (G:) › Meu Drive › Organizador Financeiro - dados, e clique em "Selecionar pasta". Depois confirme "Permitir" / "Salvar alterações".' }),
     el('div', { class: 'acesso-botoes' },
       el('button', { class: 'botao primario grande', type: 'button', onclick: async () => {
         await ligarPasta();
@@ -2936,7 +2936,7 @@ function primeirosPassos() {
       passo('2', 'Cadastre seus cartões de crédito', 'Com dia de fechamento e de vencimento, para as faturas se montarem sozinhas.', 'contas'),
       passo('3', 'Lance entradas e saídas', 'Botão "Novo lançamento" ou as teclas E (entrada), S (saída) e T (transferência).', null),
       MODO_CELULAR ? passo('4', 'Sincronize com o computador', 'Botão de setas no alto: receber do computador e enviar o que lançou aqui.', null)
-        : passo('4', 'Ligue a gravação no Drive', 'Em Ajustes, escolha a pasta Meu Drive › Organizador Financeiro.', 'ajustes')),
+        : passo('4', 'Ligue a gravação no Drive', 'Em Ajustes, escolha a pasta Meu Drive › Organizador Financeiro - dados.', 'ajustes')),
     el('button', { class: 'link-botao', type: 'button', text: 'Já fiz, esconder', onclick: () => { DB.config.boasVindas = false; mudou(); } }), 'primeiros-passos');
 }
 
@@ -4305,7 +4305,7 @@ async function enviarAoComputador() {
   const t = agoraISO();
   DB.config.ultimoEnvio = t; DB.atualizadoEm = t; // sem mudou(): senão o envio "ficaria velho" na mesma hora
   _alteracoesPendentes = true; _agendarSalvar(); renderizar();
-  avisar(r === 'compartilhado' ? 'Enviado. O computador junta sozinho quando o Organizador for aberto lá.' : 'Arquivo baixado. Coloque-o em Meu Drive › Organizador Financeiro › do celular.');
+  avisar(r === 'compartilhado' ? 'Enviado. O computador junta sozinho quando o Organizador for aberto lá.' : 'Arquivo baixado. Coloque-o em Meu Drive › Organizador Financeiro - dados › do celular.');
 }
 
 function pendenteDeEnvio() { return MODO_CELULAR && DB && (!DB.config.ultimoEnvio || DB.atualizadoEm > DB.config.ultimoEnvio); }
@@ -4323,7 +4323,7 @@ function blocoTrocaPorArquivo() {
   const ult = DB.config.ultimoEnvio;
   return el('div', { class: 'ajustes' },
     el('ol', { class: 'passos-sinc' },
-      el('li', null, el('strong', { text: 'Receber do computador' }), el('span', { text: ' — escolha no Drive: Meu Drive › Organizador Financeiro › financas.cofre.' })),
+      el('li', null, el('strong', { text: 'Receber do computador' }), el('span', { text: ' — escolha no Drive: Meu Drive › Organizador Financeiro - dados › financas.cofre.' })),
       el('li', null, el('strong', { text: 'Enviar ao computador' }), el('span', { text: ' — no menu que abrir, toque em Drive e salve na pasta "do celular".' }))),
     el('div', { class: 'botoes-linha' },
       el('button', { class: 'botao', type: 'button', onclick: receberDoComputador }, icone('baixar', 18), ' Receber do computador'),
@@ -4403,7 +4403,7 @@ TELAS.ajustes = (cont) => {
     el('h4', { text: MODO_CELULAR ? 'Sincronizar com o computador' : 'Gravação automática no Google Drive' }),
     el('p', { class: 'nota', text: MODO_CELULAR
       ? (nuvemDisponivel() ? 'O celular e o computador trocam os dados pelo seu Google Drive, sempre criptografados.' : 'O celular não grava direto no Drive. Receba do computador para ficar atualizado e envie ao computador o que lançou aqui.')
-      : 'O cofre é gravado a cada alteração em financas.cofre, na pasta escolhida (Meu Drive › Organizador Financeiro). O celular grava no mesmo arquivo pelo Drive, e este computador confere sozinho, a cada 20 segundos, se chegou algo de lá.' }),
+      : 'O cofre é gravado a cada alteração em financas.cofre, na pasta escolhida (Meu Drive › Organizador Financeiro - dados). O celular grava no mesmo arquivo pelo Drive, e este computador confere sozinho, a cada 20 segundos, se chegou algo de lá.' }),
     arqEstado,
     el('h4', { text: 'Backup manual' }),
     el('p', { class: 'nota', text: ult ? 'Último backup baixado em ' + dataBR(ult.slice(0, 10)) + '.' : 'Nenhum backup baixado ainda.' }),
@@ -4588,7 +4588,7 @@ function abrirFormPessoa(p) {
 
 // ===================== 15 - Nuvem: sincronização automática com o Google Drive (só no celular) =====================
 // O celular conversa direto com o Google Drive do Dr. Nelson, com a permissão mínima do Google ("drive.file"):
-// o aplicativo só enxerga a pasta e o arquivo que ele mesmo criou (Meu Drive › Organizador Financeiro ›
+// o aplicativo só enxerga a pasta e o arquivo que ele mesmo criou (Meu Drive › Organizador Financeiro - dados ›
 // financas.cofre), nunca os outros arquivos do Drive. O arquivo sobe e desce já CIFRADO; senha e chave
 // nunca saem do aparelho. A regra de segurança do celular só libera conexão com www.googleapis.com.
 // O computador não usa nada disto: grava na mesma pasta pelo Google Drive instalado no Windows e
@@ -4604,7 +4604,7 @@ const NUVEM = {
   API: 'https://www.googleapis.com/drive/v3',
   ENVIO: 'https://www.googleapis.com/upload/drive/v3',
   ESCOPO: 'https://www.googleapis.com/auth/drive.file',
-  PASTA: 'Organizador Financeiro',
+  PASTA: 'Organizador Financeiro - dados', // nome diferente da pasta do programa (Documentos), para não confundir
   ARQUIVO: 'financas.cofre',
   estado: 'desligada', // desligada | pronta | sincronizando | ok | entrar | sem-internet | erro
   erro: '', ultimo: null, versao: null, assinRemota: null, aviso: '',
@@ -4888,7 +4888,7 @@ function nuvemAposDesbloquear() {
 async function nuvemLigar() {
   const ok = await confirmar({
     titulo: 'Ligar a sincronização automática',
-    texto: 'O app vai abrir a página do Google: escolha a sua conta e toque em "Permitir". O Google dá ao app acesso só à pasta que ele mesmo criar (Meu Drive › Organizador Financeiro), nunca aos seus outros arquivos. Depois o app volta e pede a senha do cofre.',
+    texto: 'O app vai abrir a página do Google: escolha a sua conta e toque em "Permitir". O Google dá ao app acesso só à pasta que ele mesmo criar (Meu Drive › Organizador Financeiro - dados), nunca aos seus outros arquivos. Depois o app volta e pede a senha do cofre.',
     botao: 'Continuar no Google',
   });
   if (!ok) return;
