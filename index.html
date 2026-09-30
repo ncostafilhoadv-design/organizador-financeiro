@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ahxDkFxUBCpcN2ADHH6rPuLbtpA1m8wH6Uqv09c+sJE='; style-src 'sha256-5sDcxyCsQjKEev/PQ412XmjcTS3YIatPZCYpkrAnPBI='; img-src 'self' data:; connect-src 'none'; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UvLhAuezp8yW4vNyE6a9JHyv/FgETlqY8adKkydGB+s='; style-src 'sha256-Z0LPBcpxQAJueBebl7EWerpsUfpvqu3bR5oO+Um1iio='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -557,6 +557,15 @@ details.fatura summary::-webkit-details-marker { display: none; }
 }
 @media (hover: none) { .ll-acoes { opacity: 1; } }
 .conta-cartao.arquivada { opacity: .6; }
+/* Sincronização com o Drive (celular) */
+.bt-sinc { position: relative; }
+.bt-sinc.girando .icone { animation: girar 1s linear infinite; }
+.bt-sinc.com-alerta::after { content: ''; position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--texto-ruim); }
+@keyframes girar { to { transform: rotate(360deg); } }
+.status-nuvem { flex-basis: 100%; font-size: 12.5px; }
+details.troca-manual { border-top: 1px solid var(--borda); padding-top: 10px; }
+details.troca-manual > summary { cursor: pointer; font-size: 13.5px; color: var(--tinta-2); padding: 4px 0; }
+details.troca-manual[open] > summary { margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -567,7 +576,7 @@ details.fatura summary::-webkit-details-marker { display: none; }
 // Regra de segurança: nenhum texto do usuário entra no HTML como código.
 // Tudo é montado com createElement + textContent (inserir HTML como texto é proibido pela CSP).
 
-const VERSAO_APP = '1.2.0';
+const VERSAO_APP = '1.3.0';
 const MODO_CELULAR = true; // o montar.py troca para true na versão do celular (--celular)
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PROPS_DIRETAS = new Set(['value', 'checked', 'disabled', 'selected', 'hidden', 'readOnly', 'required', 'multiple', 'indeterminate']);
@@ -1297,6 +1306,12 @@ function sanitizarDB(bruto) {
   if (bruto.excluidos && typeof bruto.excluidos === 'object') {
     for (const [k, v] of Object.entries(bruto.excluidos)) if (RX_ID.test(k) && typeof v === 'string' && RX_TS.test(v)) db.excluidos[k] = v;
   }
+  // Integridade: dois registros com o mesmo código ficam um só (o alterado por último).
+  for (const col of ['contas', 'categorias', 'lancamentos', 'pessoas']) {
+    const mapa = new Map();
+    for (const x of db[col]) { const y = mapa.get(x.id); if (!y || x.atualizadoEm > y.atualizadoEm) mapa.set(x.id, x); }
+    if (mapa.size !== db[col].length) db[col] = Array.from(mapa.values());
+  }
   // Integridade: lançamento que aponta para conta inexistente vai para "Conta recuperada".
   const contas = new Set(db.contas.map((c) => c.id));
   let recuperada = false;
@@ -1345,6 +1360,18 @@ function juntarDB(atual, outro) {
   return { db: sanitizarDB(r), novos, atualizados };
 }
 
+// "Impressão digital" do conteúdo (sem as preferências de cada aparelho): dois cofres com a mesma
+// assinatura têm exatamente os mesmos dados. Serve para não regravar nem reenviar o que já é igual.
+function _canonico(v) {
+  if (Array.isArray(v)) return v.map(_canonico);
+  if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v).sort()) o[k] = _canonico(v[k]); return o; }
+  return v;
+}
+function assinaturaDB(db) {
+  const ord = (a) => (a || []).slice().sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+  return JSON.stringify(_canonico([ord(db.contas), ord(db.categorias), ord(db.lancamentos), ord(db.pessoas), db.excluidos || {}]));
+}
+
 // ---------- Gravação ----------
 let _salvando = false, _salvarDeNovo = false, _alteracoesPendentes = false;
 
@@ -1364,6 +1391,7 @@ async function salvarAgora() {
       try { arquivo = await gravarNoArquivoComSeguranca(env); } catch (e) { console.error(e); arquivo = false; SESSAO.arquivoPermitido = false; }
     }
     indicarSalvamento('salvo', arquivo);
+    if (MODO_CELULAR) nuvemAposSalvar();
   } catch (e) {
     console.error(e);
     indicarSalvamento('erro');
@@ -1374,41 +1402,64 @@ async function salvarAgora() {
 }
 const _agendarSalvar = debounce(salvarAgora, 300);
 
-// Junta ao cofre aberto os dados de outro envelope do MESMO cofre (outro aparelho, arquivo alterado por fora).
-async function juntarEnvelope(env) {
+// Abre os dados de outro envelope do MESMO cofre (mesma chave). Se for de outro cofre, avisa com e.outroCofre.
+async function dadosDoMesmoCofre(env) {
   let dados;
   try { dados = await decifrarDados(SESSAO.chave, env.dados); } catch { const e = new Error('Este arquivo pertence a outro cofre.'); e.outroCofre = true; throw e; }
-  const r = juntarDB(DB, prepararDB(dados));
-  r.db.config = DB.config; // preferências são de cada aparelho
-  DB = r.db;
-  return r;
+  return prepararDB(dados);
 }
 
-// Antes de gravar no arquivo vinculado, confere se alguém (outro computador) gravou nele depois de nós.
-// Se gravou, junta primeiro; se o arquivo for de outro cofre, NÃO grava por cima.
+// Junta ao cofre aberto os dados de outro aparelho (já abertos). Preferências continuam as deste aparelho.
+// r.mudou diz se algo mudou aqui (inclusive exclusões feitas lá, que não contam como novos/atualizados).
+function juntarDados(outro) {
+  const antes = assinaturaDB(DB);
+  const r = juntarDB(DB, outro);
+  r.db.config = DB.config;
+  DB = r.db;
+  r.mudou = assinaturaDB(DB) !== antes;
+  return r;
+}
+function textoDoQueChegou(r) {
+  const n = r.novos + r.atualizados;
+  if (n) return `${n} ${n === 1 ? 'item novo ou alterado' : 'itens novos ou alterados'}`;
+  return r.mudou ? 'exclusões feitas lá' : 'nada novo';
+}
+
+// Junta ao cofre aberto os dados de outro envelope do MESMO cofre (outro aparelho, arquivo alterado por fora).
+async function juntarEnvelope(env) { return juntarDados(await dadosDoMesmoCofre(env)); }
+
+async function _marcarArquivoConhecido(salvoEm) {
+  SESSAO.salvoNoArquivo = salvoEm;
+  try { SESSAO.modArquivo = (await SESSAO.arquivo.getFile()).lastModified; } catch { SESSAO.modArquivo = null; }
+}
+
+// Antes de gravar no arquivo vinculado, confere se outro aparelho (o celular, pelo Drive, ou outro computador)
+// gravou nele depois de nós. Se gravou, junta primeiro; se o arquivo for de outro cofre, NÃO grava por cima.
+// Se depois de juntar o arquivo já tiver tudo o que há aqui, não regrava (evita ida e volta sem fim com o celular).
 async function gravarNoArquivoComSeguranca(env) {
   const noArquivo = await lerEnvelopeDoArquivo(SESSAO.arquivo);
   if (noArquivo && noArquivo.salvoEm !== SESSAO.salvoNoArquivo) {
-    try {
-      const r = await juntarEnvelope(noArquivo);
-      if (r.novos || r.atualizados) {
-        avisar(`O arquivo tinha alterações de outro aparelho: ${r.novos + r.atualizados} itens juntados.`);
-        env = montarEnvelope(SESSAO.chaves, await cifrarDados(SESSAO.chave, DB));
-        await gravarCofreLocal(env);
-        SESSAO.ultimoEnv = env;
-        renderizar();
-      }
-    } catch (e) {
+    let doArquivo;
+    try { doArquivo = await dadosDoMesmoCofre(noArquivo); } catch (e) {
       if (e.outroCofre) {
         SESSAO.arquivoPermitido = false;
-        avisar('O arquivo vinculado é de outro cofre. Não gravei por cima dele. Vincule outro arquivo em Ajustes.', 'erro');
+        avisar('O arquivo da pasta é de outro cofre. Não gravei por cima dele. Escolha a pasta certa em Ajustes.', 'erro');
         return false;
       }
       throw e;
     }
+    const r = juntarDados(doArquivo);
+    if (r.mudou) {
+      avisar('Chegou do outro aparelho: ' + textoDoQueChegou(r) + '.');
+      env = montarEnvelope(SESSAO.chaves, await cifrarDados(SESSAO.chave, DB));
+      await gravarCofreLocal(env);
+      SESSAO.ultimoEnv = env;
+      renderizar();
+    }
+    if (assinaturaDB(DB) === assinaturaDB(doArquivo)) { await _marcarArquivoConhecido(noArquivo.salvoEm); return true; }
   }
   await gravarNoArquivo(SESSAO.arquivo, env);
-  SESSAO.salvoNoArquivo = env.salvoEm;
+  await _marcarArquivoConhecido(env.salvoEm);
   return true;
 }
 
@@ -2175,7 +2226,9 @@ function avisar(texto, tipo = 'ok', acao) {
 // ---------- Indicador de salvamento ----------
 let _estadoSalvo = { estado: 'salvo', quando: null, arquivo: null };
 function indicarSalvamento(estado, arquivo) {
-  _estadoSalvo = { estado, quando: estado === 'salvo' ? agoraISO() : _estadoSalvo.quando, arquivo: arquivo ?? _estadoSalvo.arquivo };
+  // a hora só muda quando uma gravação termina (redesenhar o indicador não é salvar de novo)
+  const acabouDeSalvar = estado === 'salvo' && _estadoSalvo.estado === 'salvando';
+  _estadoSalvo = { estado, quando: acabouDeSalvar ? agoraISO() : _estadoSalvo.quando, arquivo: arquivo ?? _estadoSalvo.arquivo };
   const alvo = $('#status-salvo');
   if (!alvo) return;
   limpar(alvo);
@@ -2183,8 +2236,9 @@ function indicarSalvamento(estado, arquivo) {
   if (estado === 'erro') { alvo.className = 'status-salvo erro'; alvo.append(icone('alerta', 16), ' Erro ao salvar. Faça um backup agora.'); return; }
   alvo.className = 'status-salvo ok';
   const ligado = SESSAO.pasta || SESSAO.arquivo;
-  const onde = ligado ? (SESSAO.arquivoPermitido ? 'navegador e Drive' : 'só no navegador') : 'no navegador';
+  const onde = MODO_CELULAR ? 'no celular' : ligado ? (SESSAO.arquivoPermitido ? 'navegador e Drive' : 'só no navegador') : 'no navegador';
   alvo.append(icone('check', 16), ` Salvo${_estadoSalvo.quando ? ' às ' + horaCurta(_estadoSalvo.quando) : ''} · ${onde}`);
+  if (nuvemLigada()) alvo.append(el('span', { class: 'status-nuvem', text: textoNuvem() }));
   if (ligado && !SESSAO.arquivoPermitido) {
     alvo.append(el('button', { class: 'botao pequeno primario', type: 'button', text: 'Autorizar gravação', onclick: reativarArquivo }));
   }
@@ -2213,6 +2267,31 @@ async function aposAutorizar() {
   await salvarAgora();
   if (SESSAO.pastaPermitida) await importarDoCelular(true);
   renderizar();
+}
+
+// Computador: o celular grava no financas.cofre pelo Drive (sincronização automática). A cada 20 segundos,
+// com a janela à vista, e sempre que se volta para ela, confere se o arquivo mudou; se mudou, junta sozinho
+// (e só regrava se aqui houver algo que o arquivo ainda não tem).
+let _vigiando = false;
+async function vigiarArquivo(forcar) {
+  if (MODO_CELULAR || _vigiando || !DB || !SESSAO.chave || !SESSAO.arquivo || !SESSAO.arquivoPermitido || _salvando) return;
+  if (document.visibilityState !== 'visible' && forcar !== true) return;
+  _vigiando = true;
+  try {
+    const f = await SESSAO.arquivo.getFile();
+    if (f.lastModified === SESSAO.modArquivo) return;
+    const env = await lerEnvelopeDoArquivo(SESSAO.arquivo);
+    if (!env) return; // o Drive pode estar no meio da cópia: tenta de novo na próxima volta
+    if (env.salvoEm === SESSAO.salvoNoArquivo) { SESSAO.modArquivo = f.lastModified; return; }
+    await salvarAgora(); // gravarNoArquivoComSeguranca junta o que chegou e decide se precisa regravar
+    if (SESSAO.pastaPermitida) await importarDoCelular(true);
+  } catch (e) { console.warn('Vigia do arquivo:', e && e.message); } finally { _vigiando = false; }
+}
+function iniciarVigiaDoArquivo() {
+  if (MODO_CELULAR) return;
+  setInterval(vigiarArquivo, 20000);
+  window.addEventListener('focus', () => setTimeout(vigiarArquivo, 300));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(vigiarArquivo, 300); });
 }
 
 // Computador: junta os cofres que o celular deixou em "do celular" e depois apaga esses arquivos.
@@ -2304,7 +2383,7 @@ function montarEstrutura() {
       el('div', null, el('strong', { text: 'Organizador' }), el('span', { text: 'Financeiro' }))),
     nav,
     el('div', { class: 'lateral-rodape' }, el('div', { id: 'status-salvo', class: 'status-salvo' }),
-      el('div', { class: 'versao', text: 'Versão ' + VERSAO_APP + ' · offline e criptografado' })));
+      el('div', { class: 'versao', text: 'Versão ' + VERSAO_APP + (nuvemDisponivel() ? ' · criptografado · sincroniza pelo Drive' : ' · offline e criptografado') })));
 
   const seletorEscopo = el('div', { class: 'segmentado', role: 'group', 'aria-label': 'Mostrar' },
     [['T', 'Tudo'], ['P', 'Pessoal'], ['E', 'Escritório']].map(([v, r]) =>
@@ -2316,7 +2395,7 @@ function montarEstrutura() {
     seletorEscopo,
     el('div', { class: 'topo-acoes' },
       el('button', { class: 'botao primario', type: 'button', onclick: (e) => menuNovo(e.currentTarget) }, icone('mais', 18), el('span', { class: 'some-celular', text: 'Novo lançamento' })),
-      MODO_CELULAR ? el('button', { class: 'botao-icone', type: 'button', title: 'Sincronizar com o computador', 'aria-label': 'Sincronizar com o computador', onclick: abrirSincronizar }, icone('repetir')) : null,
+      MODO_CELULAR ? el('button', { class: 'botao-icone bt-sinc', id: 'bt-sincronizar', type: 'button', title: nuvemLigada() ? textoNuvem() : 'Sincronizar com o computador', 'aria-label': 'Sincronizar com o computador', onclick: botaoSincronizarTopo }, icone('repetir')) : null,
       el('button', { class: 'botao-icone', id: 'bt-privacidade', type: 'button', title: 'Esconder/mostrar valores', onclick: () => { DB.config.ocultarValores = !DB.config.ocultarValores; aplicarPrivacidade(); mudou(true); atualizarBotoesTopo(); } }),
       el('button', { class: 'botao-icone', id: 'bt-tema', type: 'button', title: 'Tema claro/escuro', onclick: () => { DB.config.tema = temaEfetivoEscuro() ? 'claro' : 'escuro'; aplicarTema(); mudou(); } }),
       el('button', { class: 'botao-icone', type: 'button', title: 'Bloquear agora', 'aria-label': 'Bloquear agora', onclick: bloquear }, icone('cadeado'))));
@@ -2444,15 +2523,21 @@ function segundosDeEspera() { return Math.max(0, Math.ceil((_lerTentativas().ate
 function zerarTentativas() { _gravarTentativas({ n: 0, ate: 0 }); }
 
 // ---------- Início ----------
+let _jaIniciado = false;
 async function iniciar() {
-  iniciarTooltip();
-  iniciarBloqueioAutomatico();
-  iniciarAtalhos();
+  if (!_jaIniciado) { // "Voltar" chama iniciar() de novo: os vigias só podem ser ligados uma vez
+    _jaIniciado = true;
+    iniciarTooltip();
+    iniciarBloqueioAutomatico();
+    iniciarAtalhos();
+    iniciarVigiaDoArquivo();
+  }
   if (!window.crypto || !crypto.subtle || !window.indexedDB) {
     telaAcesso(el('div', { class: 'erro-caixa' }, el('strong', { text: 'Este navegador não oferece a proteção necessária.' }),
       el('p', { text: 'Abra o arquivo no Google Chrome ou no Microsoft Edge atualizados.' })));
     return;
   }
+  if (MODO_CELULAR) { try { if (await nuvemAoIniciar()) return; } catch (e) { console.error(e); } }
   let env = null;
   try { env = await lerCofreLocal(); } catch { env = null; }
   if (env) telaDesbloquear(env); else telaBoasVindas();
@@ -2465,7 +2550,10 @@ function telaBoasVindas() {
       el('p', { class: 'acesso-texto', text: 'Para usar os mesmos dados do computador, abra o arquivo do cofre que está no seu Google Drive: Meu Drive › Organizador Financeiro › financas.cofre. A senha é a mesma do computador.' }),
       el('div', { class: 'acesso-botoes' },
         el('button', { class: 'botao primario grande', type: 'button', onclick: () => abrirArquivoDeCofre(null) }, icone('arquivo', 18), ' Abrir o cofre do computador'),
+        nuvemDisponivel() ? el('button', { class: 'botao grande', type: 'button', onclick: nuvemBaixarCofreNovo }, icone('baixar', 18), ' Baixar do Google Drive (sincronização já ligada antes)') : null,
         el('button', { class: 'botao grande', type: 'button', onclick: telaCriarCofre }, icone('escudo', 18), ' Criar um cofre novo, só no celular')));
+    // voltou do Google pedindo para abrir o cofre que está no Drive
+    if (nuvemDisponivel() && _ss(_NK.depois) === 'abrir' && nuvemTemToken()) { _ss(_NK.depois, null); nuvemBaixarCofreNovo(); }
     return;
   }
   telaAcesso(
@@ -2576,9 +2664,13 @@ function telaDesbloquear(env) {
   const erro = el('div', { class: 'erro-texto', role: 'alert' });
   const botao = el('button', { class: 'botao primario grande', type: 'submit' }, icone('cadeado', 18), ' Desbloquear');
   const quando = env.salvoEm ? new Date(env.salvoEm) : null;
+  const nuvem = nuvemLigada()
+    ? (nuvemTemToken() ? 'Google Drive conectado: sincroniza assim que o cofre abrir.' : 'Google Drive: sincroniza quando houver internet (ou depois de entrar no Google).')
+    : null;
   const form = el('form', { class: 'acesso-form' },
     el('h1', { text: 'Cofre bloqueado' }),
     quando ? el('p', { class: 'acesso-texto', text: 'Último salvamento: ' + dataBR(isoData(quando)) + ' às ' + horaCurta(env.salvoEm) + '.' }) : null,
+    nuvem ? el('p', { class: 'nota', text: nuvem }) : null,
     s.caixa, erro, botao,
     el('div', { class: 'acesso-links' },
       el('button', { class: 'link-botao', type: 'button', text: 'Esqueci a senha', onclick: () => telaRecuperar(env) }),
@@ -2662,9 +2754,10 @@ function telaRecuperar(env) {
 }
 
 // Abrir um .cofre (outro computador, backup, celular). Substitui o cofre do navegador.
-async function abrirArquivoDeCofre(envAtual) {
-  let lido;
-  try { lido = await lerArquivoCofre(); } catch (e) { avisar(e.message, 'erro'); return; }
+// "pronto": cofre já lido (ex.: baixado do Google Drive), sem abrir o seletor de arquivos.
+async function abrirArquivoDeCofre(envAtual, pronto) {
+  let lido = pronto || null;
+  if (!lido) { try { lido = await lerArquivoCofre(); } catch (e) { avisar(e.message, 'erro'); return; } }
   if (!lido) return;
   const s = campoSenha({ placeholder: 'Senha deste cofre', autocomplete: 'current-password' });
   const erro = el('div', { class: 'erro-texto', role: 'alert' });
@@ -2707,6 +2800,7 @@ function entrarNoApp() {
   montarEstrutura();
   renderizar(true);
   _ultimoUso = Date.now();
+  if (MODO_CELULAR) nuvemAposDesbloquear();
 }
 
 // ===================== 09 - Painel (dashboard) =====================
@@ -2882,10 +2976,13 @@ TELAS.painel = (cont) => {
   const temDados = DB.lancamentos.length > 0;
 
   cont.appendChild(barraPeriodo(() => renderizar()));
-  if (pendenteDeEnvio()) {
+  if (nuvemLigada()) {
+    const f = faixaNuvem(); if (f) cont.appendChild(f);
+  } else if (pendenteDeEnvio()) {
     cont.appendChild(el('div', { class: 'faixa-aviso' }, icone('repetir', 18),
       el('span', { text: 'Há lançamentos feitos no celular que o computador ainda não recebeu.' }),
-      el('button', { class: 'botao pequeno primario', type: 'button', text: 'Enviar agora', onclick: enviarAoComputador })));
+      nuvemDisponivel() ? el('button', { class: 'botao pequeno primario', type: 'button', text: 'Ligar a sincronização automática', onclick: nuvemLigar }) : null,
+      el('button', { class: ['botao pequeno', nuvemDisponivel() ? '' : 'primario'], type: 'button', text: 'Enviar agora', onclick: enviarAoComputador })));
   }
   if (!MODO_CELULAR && (SESSAO.pasta || SESSAO.arquivo) && !SESSAO.arquivoPermitido) {
     cont.appendChild(el('div', { class: 'faixa-aviso' }, icone('alerta', 18),
@@ -4214,6 +4311,15 @@ async function enviarAoComputador() {
 function pendenteDeEnvio() { return MODO_CELULAR && DB && (!DB.config.ultimoEnvio || DB.atualizadoEm > DB.config.ultimoEnvio); }
 
 function blocoSincronizar() {
+  const nuvem = blocoNuvem();
+  if (!nuvem) return blocoTrocaPorArquivo();
+  return el('div', { class: 'ajustes' }, nuvem,
+    el('details', { class: 'troca-manual' },
+      el('summary', { text: 'Sem internet no celular? Trocar por arquivo (reserva)' }),
+      blocoTrocaPorArquivo()));
+}
+
+function blocoTrocaPorArquivo() {
   const ult = DB.config.ultimoEnvio;
   return el('div', { class: 'ajustes' },
     el('ol', { class: 'passos-sinc' },
@@ -4296,8 +4402,8 @@ TELAS.ajustes = (cont) => {
   cont.appendChild(cartao('Backup e arquivos', 'Tudo é gravado criptografado. Sem a senha, os arquivos são ilegíveis.', el('div', { class: 'cartao-corpo ajustes' },
     el('h4', { text: MODO_CELULAR ? 'Sincronizar com o computador' : 'Gravação automática no Google Drive' }),
     el('p', { class: 'nota', text: MODO_CELULAR
-      ? 'O celular não grava direto no Drive. Receba do computador para ficar atualizado e envie ao computador o que lançou aqui.'
-      : 'O cofre é gravado a cada alteração em financas.cofre, na pasta escolhida (recomendado: Meu Drive › Organizador Financeiro). A subpasta "do celular" recebe o que o celular envia, e o computador junta sozinho.' }),
+      ? (nuvemDisponivel() ? 'O celular e o computador trocam os dados pelo seu Google Drive, sempre criptografados.' : 'O celular não grava direto no Drive. Receba do computador para ficar atualizado e envie ao computador o que lançou aqui.')
+      : 'O cofre é gravado a cada alteração em financas.cofre, na pasta escolhida (Meu Drive › Organizador Financeiro). O celular grava no mesmo arquivo pelo Drive, e este computador confere sozinho, a cada 20 segundos, se chegou algo de lá.' }),
     arqEstado,
     el('h4', { text: 'Backup manual' }),
     el('p', { class: 'nota', text: ult ? 'Último backup baixado em ' + dataBR(ult.slice(0, 10)) + '.' : 'Nenhum backup baixado ainda.' }),
@@ -4319,7 +4425,9 @@ TELAS.ajustes = (cont) => {
       el('button', { class: 'botao', type: 'button', onclick: abrirNovoCodigo }, icone('escudo', 18), ' Gerar novo código de recuperação')),
     el('h4', { text: 'Como seus dados estão protegidos' }),
     el('ul', { class: 'lista-protecoes' },
-      ['Sem internet: o próprio arquivo proíbe qualquer conexão (regra de segurança embutida). Mesmo um código malicioso não conseguiria enviar os dados para fora.',
+      [nuvemDisponivel()
+        ? 'Uma única conexão permitida: o Google Drive (googleapis.com), só para a pasta que o próprio app criou, e o arquivo vai sempre criptografado. Qualquer outro endereço é bloqueado pela regra de segurança embutida.'
+        : 'Sem internet: o próprio arquivo proíbe qualquer conexão (regra de segurança embutida). Mesmo um código malicioso não conseguiria enviar os dados para fora.',
         'Criptografia AES-256-GCM, com chave derivada da senha por PBKDF2 (1 milhão de repetições), o que torna inviável adivinhar a senha por tentativa.',
         'A senha não é gravada em lugar nenhum. Qualquer alteração no arquivo cifrado é detectada e recusada.',
         'Nenhuma biblioteca de terceiros: todo o código está neste arquivo, inclusive os gráficos.',
@@ -4476,6 +4584,424 @@ function abrirFormPessoa(p) {
       } }),
     ],
   });
+}
+
+// ===================== 15 - Nuvem: sincronização automática com o Google Drive (só no celular) =====================
+// O celular conversa direto com o Google Drive do Dr. Nelson, com a permissão mínima do Google ("drive.file"):
+// o aplicativo só enxerga a pasta e o arquivo que ele mesmo criou (Meu Drive › Organizador Financeiro ›
+// financas.cofre), nunca os outros arquivos do Drive. O arquivo sobe e desce já CIFRADO; senha e chave
+// nunca saem do aparelho. A regra de segurança do celular só libera conexão com www.googleapis.com.
+// O computador não usa nada disto: grava na mesma pasta pelo Google Drive instalado no Windows e
+// confere a cada 20 segundos se o celular mandou algo (vigiarArquivo, em 07-ui-base.js).
+//
+// Entrada no Google: o app vai ao Google e volta com uma autorização válida por 1 hora, guardada só na
+// memória desta sessão (sessionStorage; some ao fechar o app). Ao abrir o app, se a sincronização estiver
+// ligada, essa ida ao Google acontece sozinha, antes da senha (quando já há permissão, volta na hora).
+
+const NUVEM_CLIENTE = '53324041382-baitec7knkt671r1740c6ish2obr07mk.apps.googleusercontent.com'; // ID público do app (projeto organizador-financeiro-510215 no Google Cloud do Dr. Nelson). Não é segredo. Vazio = recurso escondido.
+const NUVEM = {
+  cliente: NUVEM_CLIENTE,
+  API: 'https://www.googleapis.com/drive/v3',
+  ENVIO: 'https://www.googleapis.com/upload/drive/v3',
+  ESCOPO: 'https://www.googleapis.com/auth/drive.file',
+  PASTA: 'Organizador Financeiro',
+  ARQUIVO: 'financas.cofre',
+  estado: 'desligada', // desligada | pronta | sincronizando | ok | entrar | sem-internet | erro
+  erro: '', ultimo: null, versao: null, assinRemota: null, aviso: '',
+};
+const _NK = { cfg: 'of-nuvem', token: 'of-nuvem-token', estado: 'of-nuvem-estado', tentou: 'of-nuvem-tentou', entrar: 'of-nuvem-precisa-entrar', depois: 'of-nuvem-depois' };
+const nuvemDisponivel = () => MODO_CELULAR && !!NUVEM.cliente;
+
+// ---------- Configuração local (fora do cofre: precisa existir antes da senha) ----------
+// Guarda só se está ligada e os códigos da pasta/arquivo no Drive. Nenhum dado financeiro.
+// "conta" é o e-mail da conta Google usada, para a volta automática ao Google escolher a conta certa.
+function lerCfgNuvem() {
+  try { const c = JSON.parse(localStorage.getItem(_NK.cfg)); if (c && typeof c === 'object') return c; } catch { /* vazio */ }
+  return { ligada: false, pastaId: null, arquivoId: null, conta: null };
+}
+function gravarCfgNuvem(c) {
+  const conta = typeof c.conta === 'string' && /^[^\s@]{1,64}@[^\s@]{1,190}$/.test(c.conta) ? c.conta : null;
+  try { localStorage.setItem(_NK.cfg, JSON.stringify({ ligada: !!c.ligada, pastaId: c.pastaId || null, arquivoId: c.arquivoId || null, conta })); } catch { /* ignora */ }
+}
+const nuvemLigada = () => nuvemDisponivel() && lerCfgNuvem().ligada;
+
+function _ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* ignora */ } return null; }
+function _lerToken() {
+  try { const t = JSON.parse(_ss(_NK.token)); return t && typeof t.t === 'string' && t.exp > Date.now() ? t : null; } catch { return null; }
+}
+const nuvemTemToken = () => !!_lerToken();
+
+// ---------- Ida e volta ao Google ----------
+function nuvemRetorno() { return new URL('./', location.href).href; }
+
+function nuvemIrAoGoogle(interativo, depois) {
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  const estado = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  _ss(_NK.estado, estado);
+  _ss(_NK.depois, depois || null);
+  const p = new URLSearchParams({
+    client_id: NUVEM.cliente, redirect_uri: nuvemRetorno(), response_type: 'token', scope: NUVEM.ESCOPO,
+    state: estado, include_granted_scopes: 'false', prompt: interativo ? 'select_account' : 'none',
+  });
+  const conta = lerCfgNuvem().conta;
+  if (conta && !interativo) p.set('login_hint', conta);
+  const destino = 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
+  // a ida silenciosa não fica no histórico (o "voltar" do celular não cai na página do Google)
+  if (interativo) location.assign(destino); else location.replace(destino);
+}
+
+// Lê a resposta do Google que volta no endereço (depois do "#"). Função pura, para poder ser testada.
+function lerRespostaDoGoogle(hash, estadoEsperado, agora) {
+  const p = new URLSearchParams(String(hash || '').replace(/^#/, ''));
+  if (!p.has('access_token') && !p.has('error')) return null;
+  if (!estadoEsperado || p.get('state') !== estadoEsperado) return { tipo: 'recusada' };
+  if (p.has('error')) return { tipo: 'erro', erro: p.get('error') };
+  const escopos = (p.get('scope') || '').split(/\s+/);
+  if (!escopos.includes(NUVEM.ESCOPO)) return { tipo: 'erro', erro: 'escopo' };
+  const seg = Number(p.get('expires_in')) || 3600;
+  return { tipo: 'ok', token: { t: p.get('access_token'), exp: agora + Math.max(60, seg - 120) * 1000 } };
+}
+
+// Chamado no começo do app (antes da senha). Devolve true se saiu da página para ir ao Google.
+async function nuvemAoIniciar() {
+  if (!nuvemDisponivel()) return false;
+  const esperado = _ss(_NK.estado);
+  const r = lerRespostaDoGoogle(location.hash, esperado, Date.now());
+  if (r) {
+    history.replaceState(null, '', location.pathname + location.search); // a autorização não fica no endereço
+    _ss(_NK.estado, null);
+    if (r.tipo === 'ok') {
+      _ss(_NK.token, JSON.stringify(r.token));
+      _ss(_NK.entrar, null);
+      const c = lerCfgNuvem(); c.ligada = true; gravarCfgNuvem(c);
+    } else if (r.tipo === 'recusada') {
+      // sem pedido em aberto, é só uma resposta antiga (ex.: botão "voltar"): ignora em silêncio
+      if (esperado) NUVEM.aviso = 'Uma resposta do Google foi recusada por não ter sido pedida por este aparelho.';
+    } else if (r.erro === 'access_denied' || r.erro === 'escopo') {
+      NUVEM.aviso = r.erro === 'escopo'
+        ? 'O Google não deu a permissão de acesso à pasta do app. Tente ligar de novo e marque a permissão.'
+        : 'O Google não recebeu permissão. A sincronização não foi ligada.';
+      _ss(_NK.depois, null);
+    } else {
+      _ss(_NK.entrar, '1'); // precisa escolher a conta ou entrar de novo: o app mostra um botão
+    }
+    return false;
+  }
+  if (!nuvemLigada() || nuvemTemToken() || _ss(_NK.tentou) || _ss(_NK.entrar) || !navigator.onLine) return false;
+  if (!(await _googleAcessivel())) return false; // sem internet de verdade: não sai do app (abriria uma página de erro)
+  _ss(_NK.tentou, '1'); // uma tentativa silenciosa por sessão, para nunca entrar em ciclo
+  nuvemIrAoGoogle(false);
+  return true;
+}
+
+async function _googleAcessivel() {
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
+    await fetch(NUVEM.API + '/about?fields=kind', { cache: 'no-store', credentials: 'omit', signal: ctl.signal });
+    clearTimeout(t);
+    return true; // qualquer resposta (mesmo "não autorizado") prova que há internet
+  } catch { return false; }
+}
+
+// ---------- Chamadas ao Drive ----------
+function _erroNuvem(tipo, detalhe) { const e = new Error(tipo); e.nuvem = tipo; e.detalhe = detalhe; return e; }
+
+async function _api(metodo, url, { corpo, tipo, texto = false } = {}) {
+  const tk = _lerToken();
+  if (!tk) throw _erroNuvem('entrar');
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+  let r;
+  try {
+    r = await fetch(url, { method: metodo, headers: Object.assign({ Authorization: 'Bearer ' + tk.t }, tipo ? { 'Content-Type': tipo } : {}),
+      body: corpo, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', signal: ctl.signal });
+  } catch { throw _erroNuvem('rede'); } finally { clearTimeout(t); }
+  if (r.status === 401) { _ss(_NK.token, null); throw _erroNuvem('entrar'); }
+  if (r.status === 404) throw _erroNuvem('sumiu');
+  if (!r.ok) { let d = ''; try { d = (await r.text()).slice(0, 300); } catch { /* sem detalhe */ } throw _erroNuvem(r.status === 403 || r.status === 429 ? 'limite' : 'servidor', r.status + ' ' + d); }
+  return texto ? r.text() : r.json();
+}
+
+const _q = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+const CAMPOS_ARQ = 'id,name,version,modifiedTime,trashed,parents';
+
+async function _procurar(q) {
+  const u = NUVEM.API + '/files?' + new URLSearchParams({ q, spaces: 'drive', pageSize: '10', orderBy: 'modifiedTime desc', fields: 'files(' + CAMPOS_ARQ + ')' });
+  return ((await _api('GET', u)).files || []).filter((f) => !f.trashed);
+}
+async function _metaArquivo(id) {
+  try { const m = await _api('GET', NUVEM.API + '/files/' + encodeURIComponent(id) + '?fields=' + CAMPOS_ARQ); return m.trashed ? null : m; } catch (e) { if (e.nuvem === 'sumiu') return null; throw e; }
+}
+async function _baixarEnvelope(id) {
+  const txt = await _api('GET', NUVEM.API + '/files/' + encodeURIComponent(id) + '?alt=media', { texto: true });
+  if (!txt || txt.length > ARMAZ.MAX_BYTES) return null;
+  try { const o = JSON.parse(txt); return envelopeValido(o) ? o : null; } catch { return null; }
+}
+async function _subirEnvelope(id, env) {
+  return _api('PATCH', NUVEM.ENVIO + '/files/' + encodeURIComponent(id) + '?uploadType=media&fields=' + CAMPOS_ARQ,
+    { corpo: JSON.stringify(env), tipo: 'application/octet-stream' });
+}
+async function _criarPasta() {
+  return _api('POST', NUVEM.API + '/files?fields=id', { corpo: JSON.stringify({ name: NUVEM.PASTA, mimeType: 'application/vnd.google-apps.folder' }), tipo: 'application/json; charset=UTF-8' });
+}
+async function _criarArquivo(pastaId, env) {
+  const fr = 'fronteira' + uid();
+  const corpo = new Blob([
+    '--' + fr + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+    JSON.stringify({ name: NUVEM.ARQUIVO, parents: [pastaId], mimeType: 'application/octet-stream' }),
+    '\r\n--' + fr + '\r\nContent-Type: application/octet-stream\r\n\r\n', JSON.stringify(env), '\r\n--' + fr + '--',
+  ]);
+  return _api('POST', NUVEM.ENVIO + '/files?uploadType=multipart&fields=' + CAMPOS_ARQ, { corpo, tipo: 'multipart/related; boundary=' + fr });
+}
+
+// Acha o financas.cofre do app (o Google só mostra ao app os arquivos criados por ele).
+async function _localizarArquivo() {
+  const c = lerCfgNuvem();
+  if (c.arquivoId) { const m = await _metaArquivo(c.arquivoId); if (m) return m; }
+  const achados = await _procurar('name = ' + _q(NUVEM.ARQUIVO) + " and mimeType != 'application/vnd.google-apps.folder' and trashed = false");
+  const m = achados[0] || null;
+  if (m) gravarCfgNuvem({ ...c, arquivoId: m.id, pastaId: (m.parents || [])[0] || c.pastaId });
+  return m;
+}
+async function _localizarOuCriarPasta() {
+  const c = lerCfgNuvem();
+  if (c.pastaId) { const m = await _metaArquivo(c.pastaId); if (m) return m.id; }
+  const achadas = await _procurar('name = ' + _q(NUVEM.PASTA) + " and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
+  const id = achadas[0] ? achadas[0].id : (await _criarPasta()).id;
+  gravarCfgNuvem({ ...lerCfgNuvem(), pastaId: id });
+  return id;
+}
+
+// ---------- Sincronizar: baixa o que mudou no Drive, junta, e sobe o que só existe aqui ----------
+let _nuvemOcupada = false, _nuvemDeNovo = false;
+
+async function nuvemSincronizar({ silencioso = true } = {}) {
+  if (!nuvemLigada() || !SESSAO.chave || !DB) return;
+  if (_nuvemOcupada) { _nuvemDeNovo = true; return; }
+  if (!nuvemTemToken()) { _nuvemEstado('entrar'); if (!silencioso) nuvemPedirEntrada(); return; }
+  _nuvemOcupada = true;
+  _nuvemEstado('sincronizando');
+  let resultado = null;
+  try {
+    resultado = await _sincronizarUmaVez();
+    if (!NUVEM.contaConferida) { // uma vez por sessão (a conta pode ter sido trocada ao entrar)
+      try { const a = await _api('GET', NUVEM.API + '/about?fields=user(emailAddress)'); gravarCfgNuvem({ ...lerCfgNuvem(), conta: a.user && a.user.emailAddress }); NUVEM.contaConferida = true; } catch { /* opcional */ }
+    }
+    NUVEM.ultimo = agoraISO();
+    _nuvemEstado('ok');
+    if (resultado.recebido && resultado.recebido.mudou) avisar('Do computador: ' + textoDoQueChegou(resultado.recebido) + '.');
+    else if (!silencioso) avisar(resultado.criado ? 'Pronto: o cofre foi criado no seu Google Drive.' : resultado.enviado ? 'Sincronizado: o que foi lançado aqui já está no Drive.' : 'Tudo igual ao computador.');
+  } catch (e) {
+    if (e.outroCofre) {
+      NUVEM.erro = 'O arquivo do Drive é de outro cofre (outra senha). Nada foi apagado nem sobrescrito.';
+      _nuvemEstado('erro');
+      avisar(NUVEM.erro, 'erro');
+    } else if (e.nuvem === 'entrar') {
+      _nuvemEstado('entrar');
+      if (!silencioso) nuvemPedirEntrada();
+    } else if (e.nuvem === 'rede') {
+      _nuvemEstado('sem-internet');
+      if (!silencioso) avisar('Sem internet agora. O que foi lançado fica guardado aqui e sobe na próxima vez.', 'atencao');
+    } else {
+      console.error('Sincronização:', e.message, e.detalhe || '');
+      NUVEM.erro = e.nuvem === 'limite' ? 'O Google pediu para esperar um pouco. Tente de novo em alguns minutos.' : 'O Google Drive não respondeu direito. Tente de novo daqui a pouco.';
+      _nuvemEstado('erro');
+      if (!silencioso) avisar(NUVEM.erro, 'erro');
+    }
+  } finally {
+    _nuvemOcupada = false;
+    if (_nuvemDeNovo) { _nuvemDeNovo = false; setTimeout(() => nuvemSincronizar(), 500); }
+  }
+  return resultado;
+}
+
+async function _sincronizarUmaVez() {
+  const r = { criado: false, recebido: null, enviado: false };
+  await descarregarGravacao();
+  let meta = await _localizarArquivo();
+  if (!meta) {
+    // primeira vez: cria a pasta e o arquivo com o cofre deste aparelho
+    const pastaId = await _localizarOuCriarPasta();
+    const assin = assinaturaDB(DB); const env = SESSAO.ultimoEnv;
+    meta = await _criarArquivo(pastaId, env);
+    gravarCfgNuvem({ ...lerCfgNuvem(), pastaId, arquivoId: meta.id });
+    NUVEM.versao = meta.version; NUVEM.assinRemota = assin;
+    r.criado = r.enviado = true;
+    return r;
+  }
+  for (let volta = 0; volta < 3; volta++) {
+    if (meta.version !== NUVEM.versao || NUVEM.assinRemota == null) {
+      const env = await _baixarEnvelope(meta.id);
+      if (env) {
+        const remoto = await dadosDoMesmoCofre(env);
+        const j = juntarDados(remoto);
+        if (j.mudou) { mudou(); await descarregarGravacao(); }
+        r.recebido = r.recebido ? { novos: r.recebido.novos + j.novos, atualizados: r.recebido.atualizados + j.atualizados, mudou: r.recebido.mudou || j.mudou } : j;
+        NUVEM.assinRemota = assinaturaDB(remoto);
+      } else {
+        NUVEM.assinRemota = ''; // arquivo vazio ou danificado: o deste aparelho vai por cima
+      }
+      NUVEM.versao = meta.version;
+    }
+    await descarregarGravacao();
+    const assin = assinaturaDB(DB); const env = SESSAO.ultimoEnv; // mesma foto dos dados
+    if (assin === NUVEM.assinRemota) return r;
+    // antes de subir, confere se o computador não gravou nesse meio-tempo (se gravou, junta de novo)
+    const agora = await _metaArquivo(meta.id);
+    if (!agora) { gravarCfgNuvem({ ...lerCfgNuvem(), arquivoId: null }); NUVEM.versao = null; NUVEM.assinRemota = null; return _sincronizarUmaVez(); }
+    if (agora.version !== NUVEM.versao) { meta = agora; continue; }
+    const novo = await _subirEnvelope(meta.id, env);
+    NUVEM.versao = novo.version; NUVEM.assinRemota = assin;
+    r.enviado = true;
+    return r;
+  }
+  throw _erroNuvem('servidor', 'o arquivo mudou três vezes seguidas durante a sincronização');
+}
+
+// Depois de cada gravação no celular: sobe em alguns segundos (junta vários lançamentos seguidos num envio só).
+const _nuvemAgendar = debounce(() => nuvemSincronizar(), 4000);
+function nuvemAposSalvar() {
+  if (!nuvemLigada() || !DB) return;
+  if (NUVEM.assinRemota != null && assinaturaDB(DB) === NUVEM.assinRemota) return;
+  if (nuvemTemToken()) _nuvemAgendar(); else _nuvemEstado('entrar');
+}
+function nuvemPendente() { return nuvemLigada() && !!DB && NUVEM.assinRemota != null && assinaturaDB(DB) !== NUVEM.assinRemota; }
+
+// Depois da senha: sincroniza sozinho; e de novo ao voltar para o app e quando a internet volta.
+let _nuvemEventos = false;
+function nuvemAposDesbloquear() {
+  if (!nuvemDisponivel()) return;
+  if (NUVEM.aviso) { avisar(NUVEM.aviso, 'atencao'); NUVEM.aviso = ''; }
+  if (!_nuvemEventos) {
+    _nuvemEventos = true;
+    document.addEventListener('visibilitychange', () => {
+      if (!SESSAO.chave || !nuvemLigada()) return;
+      if (document.visibilityState === 'visible' || nuvemPendente()) nuvemSincronizar();
+    });
+    window.addEventListener('online', () => { if (SESSAO.chave && nuvemLigada()) nuvemSincronizar(); });
+  }
+  if (!nuvemLigada()) return;
+  if (_ss(_NK.entrar) && !nuvemTemToken()) { _nuvemEstado('entrar'); return; }
+  nuvemSincronizar();
+}
+
+// ---------- Ligar, entrar de novo, desligar ----------
+async function nuvemLigar() {
+  const ok = await confirmar({
+    titulo: 'Ligar a sincronização automática',
+    texto: 'O app vai abrir a página do Google: escolha a sua conta e toque em "Permitir". O Google dá ao app acesso só à pasta que ele mesmo criar (Meu Drive › Organizador Financeiro), nunca aos seus outros arquivos. Depois o app volta e pede a senha do cofre.',
+    botao: 'Continuar no Google',
+  });
+  if (!ok) return;
+  await descarregarGravacao();
+  const c = lerCfgNuvem(); c.ligada = true; gravarCfgNuvem(c);
+  nuvemIrAoGoogle(true);
+}
+
+async function nuvemPedirEntrada() {
+  const ok = await confirmar({
+    titulo: 'Entrar no Google de novo',
+    texto: 'A autorização do Google vence depois de 1 hora ou quando o app é fechado. O app vai ao Google e volta; depois pede a senha do cofre. O que já foi lançado está guardado.',
+    botao: 'Ir ao Google',
+  });
+  if (!ok) return;
+  await descarregarGravacao();
+  nuvemIrAoGoogle(true);
+}
+
+async function nuvemDesligar() {
+  const ok = await confirmar({
+    titulo: 'Desligar a sincronização?',
+    texto: 'O celular deixa de conversar com o Google Drive. Nada é apagado: o arquivo continua no Drive e os dados continuam aqui. Dá para ligar de novo quando quiser.',
+    botao: 'Desligar',
+  });
+  if (!ok) return;
+  gravarCfgNuvem({ ligada: false });
+  for (const k of [_NK.token, _NK.entrar, _NK.tentou]) _ss(k, null);
+  NUVEM.versao = NUVEM.assinRemota = null; NUVEM.contaConferida = false;
+  _nuvemEstado('desligada');
+  renderizar();
+}
+
+// Celular novo (ou app reinstalado): baixa o cofre do Drive e abre com a senha.
+async function nuvemBaixarCofreNovo() {
+  if (!nuvemTemToken()) { nuvemIrAoGoogle(true, 'abrir'); return; }
+  try {
+    const m = await _localizarArquivo();
+    const env = m ? await _baixarEnvelope(m.id) : null;
+    if (!env) { avisar('Ainda não há cofre do app no seu Drive. Use "Abrir o cofre do computador".', 'atencao'); return; }
+    abrirArquivoDeCofre(null, { env, handle: null, nome: NUVEM.ARQUIVO + ' (Google Drive)' });
+  } catch (e) {
+    avisar(e.nuvem === 'rede' ? 'Sem internet agora.' : e.nuvem === 'entrar' ? 'Entre no Google de novo.' : 'O Google Drive não respondeu. Tente de novo.', 'erro');
+  }
+}
+
+// ---------- Como aparece na tela ----------
+function _nuvemEstado(e) {
+  NUVEM.estado = e;
+  const b = $('#bt-sincronizar');
+  if (b) {
+    b.classList.toggle('girando', e === 'sincronizando');
+    b.classList.toggle('com-alerta', e === 'entrar' || e === 'erro');
+    b.title = textoNuvem();
+  }
+  indicarSalvamento(_estadoSalvo.estado);
+  atualizarFaixaNuvem();
+}
+
+function textoNuvem() {
+  if (!nuvemLigada()) return 'Sincronização com o Drive desligada';
+  switch (NUVEM.estado) {
+    case 'sincronizando': return 'Sincronizando com o Drive…';
+    case 'ok': return 'Drive: sincronizado às ' + horaCurta(NUVEM.ultimo);
+    case 'entrar': return 'Drive: é preciso entrar no Google';
+    case 'sem-internet': return 'Drive: sem internet (sobe depois)';
+    case 'erro': return 'Drive: ' + (NUVEM.erro || 'erro');
+    default: return 'Drive: ligado';
+  }
+}
+
+// Faixa no Painel quando a sincronização precisa do Dr. Nelson.
+function faixaNuvem() {
+  if (!nuvemLigada()) return null;
+  if (NUVEM.estado === 'entrar') {
+    return el('div', { class: 'faixa-aviso', id: 'faixa-nuvem' }, icone('repetir', 18),
+      el('span', { text: 'Para sincronizar com o computador, entre no Google de novo (a autorização vence em 1 hora).' }),
+      el('button', { class: 'botao pequeno primario', type: 'button', text: 'Entrar no Google', onclick: nuvemPedirEntrada }));
+  }
+  if (NUVEM.estado === 'erro') {
+    return el('div', { class: 'faixa-aviso', id: 'faixa-nuvem' }, icone('alerta', 18), el('span', { text: NUVEM.erro }),
+      el('button', { class: 'botao pequeno', type: 'button', text: 'Tentar de novo', onclick: () => nuvemSincronizar({ silencioso: false }) }));
+  }
+  return el('div', { id: 'faixa-nuvem', hidden: true });
+}
+function atualizarFaixaNuvem() {
+  const f = $('#faixa-nuvem');
+  if (!f) return;
+  const nova = faixaNuvem();
+  if (nova) f.replaceWith(nova); else f.remove();
+}
+
+function botaoSincronizarTopo() {
+  if (nuvemLigada()) nuvemSincronizar({ silencioso: false }); else abrirSincronizar();
+}
+
+// Bloco de Ajustes (celular).
+function blocoNuvem() {
+  if (!nuvemDisponivel()) return null;
+  if (!nuvemLigada()) {
+    return el('div', { class: 'ajustes' },
+      el('p', { class: 'nota', text: 'Com a sincronização automática, o celular e o computador ficam iguais sozinhos: ao abrir o app e depois de cada lançamento. O app só enxerga a pasta que ele mesmo cria no seu Drive, e os dados sobem criptografados.' }),
+      el('div', { class: 'botoes-linha' }, el('button', { class: 'botao primario', type: 'button', onclick: nuvemLigar }, icone('repetir', 18), ' Ligar a sincronização automática')));
+  }
+  const alerta = NUVEM.estado === 'entrar' || NUVEM.estado === 'erro';
+  return el('div', { class: 'ajustes' },
+    el('div', { class: 'linha-estado ' + (alerta ? 'atencao' : 'ok') }, icone(alerta ? 'alerta' : 'check', 18),
+      el('span', null, el('strong', { text: 'Sincronização automática ligada' }), ' · ' + textoNuvem().replace(/^Drive: /, '')),
+      NUVEM.estado === 'entrar' ? el('button', { class: 'botao pequeno primario', type: 'button', text: 'Entrar no Google', onclick: nuvemPedirEntrada }) : null),
+    el('div', { class: 'botoes-linha' },
+      el('button', { class: 'botao pequeno', type: 'button', onclick: () => nuvemSincronizar({ silencioso: false }).then(() => renderizar()) }, icone('repetir', 16), ' Sincronizar agora'),
+      el('button', { class: 'link-botao', type: 'button', text: 'Desligar', onclick: nuvemDesligar })),
+    el('p', { class: 'nota', text: 'Pasta no Drive: Meu Drive › ' + NUVEM.PASTA + ' › ' + NUVEM.ARQUIVO + '. No computador, a pasta ligada em Ajustes deve ser essa mesma.' }));
 }
 
 // ===================== 99 - Partida =====================
