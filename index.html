@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k6jlqjWgEjcwtq0y0GXsGafCJXgassbG6qar/z2KbRA='; style-src 'sha256-Z0LPBcpxQAJueBebl7EWerpsUfpvqu3bR5oO+Um1iio='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3BitBTCRgFjvI7XQ8C40Rwcya5EOaXjWViTTOeghCvs='; style-src 'sha256-TLkH49ig+NRAXtVIhma5FGfAhIlvzbr5PhNutDyCMck='; img-src 'self' data:; connect-src https://www.googleapis.com; font-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; require-trusted-types-for 'script'; trusted-types sw">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -566,6 +566,48 @@ details.fatura summary::-webkit-details-marker { display: none; }
 details.troca-manual { border-top: 1px solid var(--borda); padding-top: 10px; }
 details.troca-manual > summary { cursor: pointer; font-size: 13.5px; color: var(--tinta-2); padding: 4px 0; }
 details.troca-manual[open] > summary { margin-bottom: 8px; }
+/* Configurações: abas internas */
+.abas-config { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--borda); padding-bottom: 8px; }
+.aba-config { display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: none; color: var(--tinta-2); font: inherit; font-weight: 500; padding: 7px 12px; border-radius: 10px; cursor: pointer; }
+.aba-config:hover { background: var(--hover); color: var(--tinta); }
+.aba-config.ativa { background: var(--acento-fundo); color: var(--acento-texto); border-color: var(--acento-trilho); }
+.lista-simples li.arquivada { opacity: .6; }
+/* Registro de lançamentos */
+.reg-voltar { margin-bottom: -6px; }
+.reg-voltar .link-botao { display: inline-flex; align-items: center; gap: 4px; }
+.reg-lista { padding: 0; overflow: hidden; }
+.reg-cabecalho, .reg-linha { display: grid; grid-template-columns: 52px minmax(180px, 2.4fr) minmax(120px, 1.3fr) minmax(100px, 1fr) 46px 108px 118px; gap: 10px; align-items: center; padding: 8px 16px; }
+.reg-cabecalho { font-size: 12px; font-weight: 600; color: var(--tinta-3); border-bottom: 1px solid var(--grade); }
+.reg-cabecalho span:last-child, .reg-valor { text-align: right; }
+.reg-linha { border-top: 1px solid var(--grade); cursor: pointer; font-size: 13.5px; outline: none; }
+.reg-linha:hover, .reg-linha:focus-visible { background: var(--hover); }
+.reg-data { color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+.reg-desc { min-width: 0; }
+.reg-titulo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.reg-titulo strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.reg-sub { display: none; font-size: 12px; color: var(--tinta-3); }
+.reg-cat, .reg-conta { color: var(--tinta-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-escopo { font-size: 11px; color: var(--tinta-3); }
+.reg-sit { font-size: 12.5px; color: var(--tinta-2); }
+.reg-linha.pendente .reg-sit { color: var(--alerta-texto); }
+.reg-linha.atrasado .reg-sit { color: var(--texto-ruim); font-weight: 600; }
+.reg-valor { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reg-mes { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px 8px; font-size: 13px; font-weight: 600; color: var(--tinta-2); background: var(--trilho); border-top: 1px solid var(--grade); }
+.reg-mes-totais { display: inline-flex; gap: 12px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.reg-res { color: var(--tinta); }
+@media (max-width: 860px) {
+  .reg-cabecalho { display: none; }
+  .reg-linha { grid-template-columns: 40px 1fr auto; padding: 9px 12px; gap: 8px; }
+  .reg-cat, .reg-conta, .reg-escopo, .reg-sit { display: none; }
+  .reg-sub { display: block; }
+  .reg-mes { padding: 10px 12px 6px; }
+}
+/* Celular: o gesto de puxar a tela sincroniza, em vez de recarregar (que fecharia o cofre) */
+.sem-recarregar, .sem-recarregar body { overscroll-behavior-y: none; }
+.sem-recarregar .conteudo { overscroll-behavior-y: contain; }
+.puxar-sinc { position: fixed; top: 0; left: 50%; z-index: 60; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--superficie); color: var(--tinta-2); box-shadow: var(--sombra-forte); font-size: 13px; font-weight: 500; pointer-events: none; }
+.puxar-sinc.pronto { color: var(--acento-texto); background: var(--acento-fundo); }
+.puxar-sinc.pronto .icone { animation: girar 1s linear infinite; }
 </style>
 </head>
 <body>
@@ -576,7 +618,7 @@ details.troca-manual[open] > summary { margin-bottom: 8px; }
 // Regra de segurança: nenhum texto do usuário entra no HTML como código.
 // Tudo é montado com createElement + textContent (inserir HTML como texto é proibido pela CSP).
 
-const VERSAO_APP = '1.3.0';
+const VERSAO_APP = '1.4.0';
 const MODO_CELULAR = true; // o montar.py troca para true na versão do celular (--celular)
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PROPS_DIRETAS = new Set(['value', 'checked', 'disabled', 'selected', 'hidden', 'readOnly', 'required', 'multiple', 'indeterminate']);
@@ -1443,7 +1485,7 @@ async function gravarNoArquivoComSeguranca(env) {
     try { doArquivo = await dadosDoMesmoCofre(noArquivo); } catch (e) {
       if (e.outroCofre) {
         SESSAO.arquivoPermitido = false;
-        avisar('O arquivo da pasta é de outro cofre. Não gravei por cima dele. Escolha a pasta certa em Ajustes.', 'erro');
+        avisar('O arquivo da pasta é de outro cofre. Não gravei por cima dele. Escolha a pasta certa em Configurações › Backup e sincronização.', 'erro');
         return false;
       }
       throw e;
@@ -2257,7 +2299,7 @@ async function reativarArquivo() {
   } else if (SESSAO.arquivo) {
     SESSAO.arquivoPermitido = await permissaoArquivo(SESSAO.arquivo, true);
   }
-  if (!SESSAO.arquivoPermitido) { avisar('O Chrome não liberou a gravação. Tente de novo ou escolha a pasta em Ajustes.', 'erro'); return; }
+  if (!SESSAO.arquivoPermitido) { avisar('O Chrome não liberou a gravação. Tente de novo ou escolha a pasta em Configurações › Backup e sincronização.', 'erro'); return; }
   await aposAutorizar();
   avisar('Gravação no Drive ativada.');
 }
@@ -2367,7 +2409,7 @@ const ABAS = [
   { id: 'parceiros', nome: 'Parceiros', icone: 'pessoa' },
   { id: 'recebiveis', nome: 'Recebíveis', icone: 'recebiveis', breve: true },
   { id: 'patrimonio', nome: 'Patrimônio', icone: 'patrimonio', breve: true },
-  { id: 'ajustes', nome: 'Ajustes e backup', curto: 'Ajustes', icone: 'ajustes' },
+  { id: 'ajustes', nome: 'Configurações', curto: 'Config.', icone: 'ajustes' },
 ];
 const TELAS = {};
 
@@ -2531,6 +2573,7 @@ async function iniciar() {
     iniciarBloqueioAutomatico();
     iniciarAtalhos();
     iniciarVigiaDoArquivo();
+    iniciarPuxarParaSincronizar();
   }
   if (!window.crypto || !crypto.subtle || !window.indexedDB) {
     telaAcesso(el('div', { class: 'erro-caixa' }, el('strong', { text: 'Este navegador não oferece a proteção necessária.' }),
@@ -2640,7 +2683,7 @@ function telaArquivoInicial() {
         await ligarPasta();
         entrarNoApp();
       } }, icone('arquivo', 18), ' Escolher a pasta do Drive'),
-      el('button', { class: 'botao grande', type: 'button', text: 'Agora não (dá para fazer depois em Ajustes)', onclick: entrarNoApp })));
+      el('button', { class: 'botao grande', type: 'button', text: 'Agora não (dá para fazer depois em Configurações)', onclick: entrarNoApp })));
 }
 
 // Escolhe a pasta do cofre, grava nela (juntando se já houver um cofre dali) e busca os envios do celular.
@@ -2805,18 +2848,21 @@ function entrarNoApp() {
 
 // ===================== 09 - Painel (dashboard) =====================
 
-function barraPeriodo(aoMudar) {
-  const p = ESTADO.periodo;
+// p: o período que a barra controla (padrão: o do app). comTudo: acrescenta a opção "Tudo" (Registro).
+function barraPeriodo(aoMudar, p = ESTADO.periodo, comTudo = false) {
+  if (!p.mes) p.mes = mesAtual();
   const tipos = [['mes', 'Mês'], ['3m', '3 meses'], ['6m', '6 meses'], ['12m', '12 meses'], ['ano', 'Ano']];
-  const passo = p.tipo === 'ano' ? 12 : p.tipo === 'mes' ? 1 : { '3m': 3, '6m': 6, '12m': 12 }[p.tipo];
+  if (comTudo) tipos.push(['tudo', 'Tudo']);
+  const passo = p.tipo === 'ano' ? 12 : p.tipo === 'mes' ? 1 : { '3m': 3, '6m': 6, '12m': 12 }[p.tipo] || 1;
   const mover = (n) => { p.mes = addMeses(p.mes, n * passo); aoMudar(); };
-  return el('div', { class: 'barra-filtros' },
-    el('div', { class: 'navegador-mes' },
+  const navegador = p.tipo === 'tudo'
+    ? el('div', { class: 'navegador-mes' }, el('strong', { class: 'periodo-rotulo', text: 'Todos os meses' }))
+    : el('div', { class: 'navegador-mes' },
       el('button', { class: 'botao-icone', type: 'button', 'aria-label': 'Período anterior', onclick: () => mover(-1) }, icone('esquerda', 18)),
-      el('strong', { class: 'periodo-rotulo', text: rotuloPeriodo() }),
+      el('strong', { class: 'periodo-rotulo', text: rotuloPeriodo(p) }),
       el('button', { class: 'botao-icone', type: 'button', 'aria-label': 'Próximo período', onclick: () => mover(1) }, icone('direita', 18)),
-      p.mes !== mesAtual() ? el('button', { class: 'link-botao', type: 'button', text: 'Voltar para hoje', onclick: () => { p.mes = mesAtual(); aoMudar(); } }) : null),
-    alternador(tipos, p.tipo, (v) => { p.tipo = v; aoMudar(); }));
+      p.mes !== mesAtual() ? el('button', { class: 'link-botao', type: 'button', text: 'Voltar para hoje', onclick: () => { p.mes = mesAtual(); aoMudar(); } }) : null);
+  return el('div', { class: 'barra-filtros' }, navegador, alternador(tipos, p.tipo, (v) => { p.tipo = v; aoMudar(); }));
 }
 
 function cartao(titulo, sub, corpo, acoes, classe) {
@@ -2929,14 +2975,14 @@ function itemPendencia(p) {
 
 function primeirosPassos() {
   const passo = (n, t, d, aba) => el('li', null, el('span', { class: 'passo-n', text: n }), el('div', null, el('strong', { text: t }), el('span', { text: d })),
-    aba ? el('button', { class: 'botao pequeno', type: 'button', text: 'Abrir', onclick: () => irPara(aba) }) : null);
+    aba ? el('button', { class: 'botao pequeno', type: 'button', text: 'Abrir', onclick: () => { const [t, sub] = aba.split(':'); if (sub) ESTADO.config = sub; irPara(t); } }) : null);
   return cartao('Primeiros passos', 'Leva cinco minutos e deixa o painel certo desde o início.',
     el('ol', { class: 'passos' },
       passo('1', 'Acerte suas contas e saldos', 'Renomeie as contas de exemplo e informe o saldo de hoje de cada uma.', 'contas'),
       passo('2', 'Cadastre seus cartões de crédito', 'Com dia de fechamento e de vencimento, para as faturas se montarem sozinhas.', 'contas'),
       passo('3', 'Lance entradas e saídas', 'Botão "Novo lançamento" ou as teclas E (entrada), S (saída) e T (transferência).', null),
-      MODO_CELULAR ? passo('4', 'Sincronize com o computador', 'Botão de setas no alto: receber do computador e enviar o que lançou aqui.', null)
-        : passo('4', 'Ligue a gravação no Drive', 'Em Ajustes, escolha a pasta Meu Drive › Organizador Financeiro - dados.', 'ajustes')),
+      MODO_CELULAR ? passo('4', 'Ligue a sincronização com o computador', 'Em Configurações › Backup e sincronização: "Ligar a sincronização automática".', 'ajustes:backup')
+        : passo('4', 'Ligue a gravação no Drive', 'Em Configurações › Backup e sincronização, escolha a pasta Meu Drive › Organizador Financeiro - dados.', 'ajustes:backup')),
     el('button', { class: 'link-botao', type: 'button', text: 'Já fiz, esconder', onclick: () => { DB.config.boasVindas = false; mudou(); } }), 'primeiros-passos');
 }
 
@@ -2958,7 +3004,7 @@ function observacoes(meses, tot) {
   const atras = pendencias(0).filter((p) => p.atrasado);
   if (atras.length) r.push(['ruim', `${atras.length} ${atras.length === 1 ? 'item atrasado' : 'itens atrasados'} somando ${moeda(somar(atras, (p) => p.valor))}.`]);
   const ult = DB.config.ultimoBackup;
-  if (!MODO_CELULAR && !SESSAO.arquivo && (!ult || diffDias(ult.slice(0, 10), hojeISO()) > 7)) r.push(['atencao', 'Faz mais de uma semana sem backup e a gravação no Drive não está ligada. Veja em Ajustes.']);
+  if (!MODO_CELULAR && !SESSAO.arquivo && (!ult || diffDias(ult.slice(0, 10), hojeISO()) > 7)) r.push(['atencao', 'Faz mais de uma semana sem backup e a gravação no Drive não está ligada. Veja em Configurações › Backup e sincronização.']);
   return r;
 }
 
@@ -3010,7 +3056,8 @@ TELAS.painel = (cont) => {
     heroi,
     tileNumero({ rotulo: 'Entradas', icone: 'entrada', classe: 'entrada', valor: moeda(tot.ent), sub: `${moeda(tot.entPago)} recebido · ${moeda(tot.ent - tot.entPago)} a receber`, delta: variacao(tot.ent, media((t) => t.ent), true), serie: serie.map((s) => s.ent), aoClicar: irLista('entrada'), dica: 'Abrir Entradas' }),
     tileNumero({ rotulo: 'Saídas', icone: 'saida', classe: 'saida', valor: moeda(tot.sai), sub: `${moeda(tot.saiPago)} pago · ${moeda(tot.sai - tot.saiPago)} a pagar`, delta: variacao(tot.sai, media((t) => t.sai), false), serie: serie.map((s) => s.sai), aoClicar: irLista('saida'), dica: 'Abrir Saídas' }),
-    tileNumero({ rotulo: tot.res >= 0 ? 'Sobrou' : 'Faltou', icone: 'grafico', classe: 'resultado', valor: moeda(Math.abs(tot.res)), sub: tot.ent ? `${pct((tot.res / tot.ent) * 100)} das entradas` : 'sem entradas no período', serie: serie.map((s) => s.res) })));
+    tileNumero({ rotulo: tot.res >= 0 ? 'Sobrou' : 'Faltou', icone: 'grafico', classe: 'resultado', valor: moeda(Math.abs(tot.res)), sub: tot.ent ? `${pct((tot.res / tot.ent) * 100)} das entradas` : 'sem entradas no período', serie: serie.map((s) => s.res),
+      aoClicar: () => abrirRegistro({ tipo: 'todos', origem: { aba: 'painel', rotulo: 'o Painel' } }), dica: 'Ver todos os lançamentos do período no registro' })));
 
   // Entradas x saídas por mês
   const destaque = new Set(meses);
@@ -3202,10 +3249,18 @@ function telaLista(tipo, cont) {
   // Resumo
   const rotuloTotal = { periodo: 'Total do período', pendentes: 'Total ' + T.pendente.toLowerCase(), recentes: 'Últimos ' + itens.length + ' lançados', tudo: 'Total geral' }[visao];
   const atrasados = itens.filter((l) => l.status === 'pendente' && l.data < hojeISO());
+  // Cada total abre o Registro de lançamentos já com este período e estes filtros, para analisar.
+  const noRegistro = (status) => () => abrirRegistro({
+    tipo, periodo: visao === 'periodo' ? ESTADO.periodo : 'tudo',
+    filtros: { ...f, status: status !== undefined ? status : visao === 'pendentes' ? 'pendente' : f.status },
+    ordem: visao === 'recentes' ? 'recentes' : visao === 'pendentes' ? 'data-asc' : 'data-desc',
+    origem: { aba: tipo === 'entrada' ? 'entradas' : 'saidas', rotulo: T.plural },
+  });
+  const dica = 'Abrir no Registro de lançamentos, com este período e estes filtros';
   cont.appendChild(el('div', { class: 'grade-tiles compacta' },
-    tileNumero({ rotulo: rotuloTotal + (temFiltro ? ' (filtrado)' : ''), classe: tipo, valor: moeda(total), sub: itens.length + (itens.length === 1 ? ' lançamento' : ' lançamentos') }),
-    tileNumero({ rotulo: T.pago, classe: tipo, valor: moeda(pago) }),
-    tileNumero({ rotulo: T.pendente, classe: 'pendente', valor: moeda(total - pago), sub: atrasados.length ? atrasados.length + (atrasados.length === 1 ? ' atrasado' : ' atrasados') + ': ' + moeda(somar(atrasados, (l) => l.valor)) : null })));
+    tileNumero({ rotulo: rotuloTotal + (temFiltro ? ' (filtrado)' : ''), classe: tipo, valor: moeda(total), sub: itens.length + (itens.length === 1 ? ' lançamento' : ' lançamentos'), aoClicar: noRegistro(), dica }),
+    tileNumero({ rotulo: T.pago, classe: tipo, valor: moeda(pago), aoClicar: noRegistro('pago'), dica }),
+    tileNumero({ rotulo: T.pendente, classe: 'pendente', valor: moeda(total - pago), sub: atrasados.length ? atrasados.length + (atrasados.length === 1 ? ' atrasado' : ' atrasados') + ': ' + moeda(somar(atrasados, (l) => l.valor)) : null, aoClicar: noRegistro('pendente'), dica })));
 
   if (!itens.length) {
     const vazio = { periodo: temFiltro ? 'Nada encontrado com esses filtros.' : T.vazio, pendentes: 'Nada ' + T.pendente.toLowerCase() + '.', recentes: 'Nenhum lançamento ainda.', tudo: 'Nada encontrado.' }[visao];
@@ -4363,8 +4418,20 @@ function abrirFormCategoria(cat, tipo) {
   });
 }
 
+// ----- Configurações: abas internas (o que era "Ajustes e backup") -----
+const ABAS_CONFIG = [['ajustes', 'Ajustes', 'ajustes'], ['backup', 'Backup e sincronização', 'repetir'], ['cadastros', 'Cadastros', 'pessoa'], ['registro', 'Registro de lançamentos', 'tabela']];
+
 TELAS.ajustes = (cont) => {
-  // ----- Backup -----
+  const aba = ABAS_CONFIG.some(([v]) => v === ESTADO.config) ? ESTADO.config : 'ajustes';
+  cont.appendChild(el('div', { class: 'abas-config', role: 'tablist', 'aria-label': 'Partes das configurações' }, ABAS_CONFIG.map(([v, r, ic]) =>
+    el('button', { type: 'button', role: 'tab', class: ['aba-config', v === aba ? 'ativa' : ''], 'aria-selected': v === aba ? 'true' : 'false',
+      onclick: () => { ESTADO.config = v; if (v !== 'registro') ESTADO.registro.origem = null; renderizar(true); } }, icone(ic, 16), el('span', { text: r })))));
+  ({ ajustes: configAjustes, backup: configBackup, cadastros: configCadastros, registro: telaRegistro })[aba](cont);
+  cont.appendChild(el('p', { class: 'rodape-ajustes', text: 'Organizador Financeiro ' + VERSAO_APP + ' · formato de dados ' + VERSAO_DADOS + ' · ' + DB.lancamentos.length + ' lançamentos, ' + DB.contas.length + ' contas, ' + DB.categorias.length + ' categorias.' }));
+};
+
+// Aba "Backup e sincronização"
+function configBackup(cont) {
   const ult = DB.config.ultimoBackup;
   const botaoPasta = (rotulo, primario) => el('button', { class: ['botao pequeno', primario ? 'primario' : ''], type: 'button', text: rotulo, onclick: async () => { await ligarPasta(); renderizar(); } });
   let arqEstado;
@@ -4415,7 +4482,10 @@ TELAS.ajustes = (cont) => {
     el('p', { class: 'nota', text: 'O aplicativo guarda sozinho a última versão de cada um dos últimos 10 dias de uso. Serve para desfazer um erro grande.' }),
     copias)));
 
-  // ----- Segurança -----
+}
+
+// Aba "Ajustes": segurança e aparência
+function configAjustes(cont) {
   const selBloq = seletor([[1, '1 minuto'], [3, '3 minutos'], [5, '5 minutos'], [10, '10 minutos'], [15, '15 minutos'], [30, '30 minutos']].map(([v, r]) => [String(v), r]), String(DB.config.bloqueioMin));
   selBloq.addEventListener('change', () => { DB.config.bloqueioMin = Number(selBloq.value); mudou(true); avisar('Bloqueio automático ajustado.'); });
   cont.appendChild(cartao('Segurança', null, el('div', { class: 'cartao-corpo ajustes' },
@@ -4436,7 +4506,28 @@ TELAS.ajustes = (cont) => {
       ].map((t) => el('li', null, icone('check', 16), el('span', { text: t })))),
     el('p', { class: 'nota', text: 'Cuidados que dependem do senhor: não instalar extensões desconhecidas no navegador (elas podem ler a tela aberta), manter o Windows atualizado e não usar a mesma senha mestra em outro lugar.' }))));
 
-  // ----- Categorias -----
+  cont.appendChild(cartao('Aparência', null, el('div', { class: 'cartao-corpo ajustes' },
+    campo('Tema', alternador([['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']], DB.config.tema, (v) => { DB.config.tema = v; aplicarTema(); mudou(); })),
+    el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: DB.config.boasVindas, onchange: (e) => { DB.config.boasVindas = e.target.checked; mudou(true); } }), el('span', { text: 'Mostrar "Primeiros passos" no painel' })))));
+
+}
+
+// Aba "Cadastros": pessoas (parceiros; clientes virão com os Recebíveis) e categorias
+function configCadastros(cont) {
+  const pessoas = (DB.pessoas || []).slice().sort((a, b) => (a.arquivada - b.arquivada) || a.tipo.localeCompare(b.tipo) || a.nome.localeCompare(b.nome));
+  const usosPessoa = (p) => DB.lancamentos.filter((l) => (l.divisao || []).some((d) => d.parceiroId === p.id) || l.parceiroId === p.id).length;
+  cont.appendChild(cartao('Pessoas', 'Parceiros com quem o senhor divide honorários. Os clientes entram aqui na etapa dos Recebíveis.',
+    el('div', { class: 'cartao-corpo ajustes' },
+      pessoas.length
+        ? el('ul', { class: 'lista-simples' }, pessoas.map((p) => el('li', { class: p.arquivada ? 'arquivada' : '' },
+          el('button', { class: 'ls-botao', type: 'button', onclick: () => abrirFormPessoa(p) },
+            el('span', { class: 'ls-texto' }, el('strong', { text: p.nome }),
+              el('span', { text: [TIPOS_PESSOA[p.tipo], p.oab ? 'OAB ' + p.oab : '', p.telefone, p.email, p.arquivada ? 'arquivado' : ''].filter(Boolean).join(' · ') })),
+            el('span', { class: 'texto-suave', text: usosPessoa(p) + ' lanç.' })))))
+        : el('p', { class: 'nota', text: 'Nenhuma pessoa cadastrada ainda. Também dá para cadastrar na hora, ao dividir uma entrada com um parceiro.' }),
+      el('div', { class: 'botoes-linha' },
+        el('button', { class: 'botao pequeno primario', type: 'button', onclick: () => abrirFormPessoa() }, icone('mais', 16), ' Novo parceiro'),
+        el('button', { class: 'link-botao', type: 'button', text: 'Ver quanto cada parceiro recebeu', onclick: () => irPara('parceiros') })))));
   const blocoCat = (tipo) => {
     const lista = DB.categorias.filter((c) => c.tipo === tipo).sort((a, b) => (a.arquivada - b.arquivada) || a.escopo.localeCompare(b.escopo) || a.nome.localeCompare(b.nome));
     const usos = new Map(); for (const l of DB.lancamentos) if (l.categoriaId) usos.set(l.categoriaId, (usos.get(l.categoriaId) || 0) + 1);
@@ -4451,13 +4542,7 @@ TELAS.ajustes = (cont) => {
   };
   cont.appendChild(cartao('Categorias', 'Clique para editar. Categorias com lançamentos podem ser arquivadas, sem perder o histórico.', el('div', { class: 'cartao-corpo grade-2 sem-margem' }, blocoCat('entrada'), blocoCat('saida'))));
 
-  // ----- Aparência -----
-  cont.appendChild(cartao('Aparência', null, el('div', { class: 'cartao-corpo ajustes' },
-    campo('Tema', alternador([['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']], DB.config.tema, (v) => { DB.config.tema = v; aplicarTema(); mudou(); })),
-    el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: DB.config.boasVindas, onchange: (e) => { DB.config.boasVindas = e.target.checked; mudou(true); } }), el('span', { text: 'Mostrar "Primeiros passos" no painel' })))));
-
-  cont.appendChild(el('p', { class: 'rodape-ajustes', text: 'Organizador Financeiro ' + VERSAO_APP + ' · formato de dados ' + VERSAO_DADOS + ' · ' + DB.lancamentos.length + ' lançamentos, ' + DB.contas.length + ' contas, ' + DB.categorias.length + ' categorias.' }));
-};
+}
 
 // ----- Próximas etapas -----
 function telaEmBreve(cont, titulo, texto, itens) {
@@ -4878,6 +4963,11 @@ function nuvemAposDesbloquear() {
       if (document.visibilityState === 'visible' || nuvemPendente()) nuvemSincronizar();
     });
     window.addEventListener('online', () => { if (SESSAO.chave && nuvemLigada()) nuvemSincronizar(); });
+    // a cada 1 minuto, com o app aberto e à vista: confere se o computador mandou algo (uma consulta pequena)
+    setInterval(() => {
+      if (!SESSAO.chave || !nuvemLigada() || document.visibilityState !== 'visible' || !nuvemTemToken() || _nuvemOcupada) return;
+      nuvemSincronizar();
+    }, 60000);
   }
   if (!nuvemLigada()) return;
   if (_ss(_NK.entrar) && !nuvemTemToken()) { _nuvemEstado('entrar'); return; }
@@ -5001,7 +5091,236 @@ function blocoNuvem() {
     el('div', { class: 'botoes-linha' },
       el('button', { class: 'botao pequeno', type: 'button', onclick: () => nuvemSincronizar({ silencioso: false }).then(() => renderizar()) }, icone('repetir', 16), ' Sincronizar agora'),
       el('button', { class: 'link-botao', type: 'button', text: 'Desligar', onclick: nuvemDesligar })),
-    el('p', { class: 'nota', text: 'Pasta no Drive: Meu Drive › ' + NUVEM.PASTA + ' › ' + NUVEM.ARQUIVO + '. No computador, a pasta ligada em Ajustes deve ser essa mesma.' }));
+    el('p', { class: 'nota', text: 'Pasta no Drive: Meu Drive › ' + NUVEM.PASTA + ' › ' + NUVEM.ARQUIVO + '. No computador, a pasta ligada em Configurações › Backup e sincronização deve ser essa mesma.' }));
+}
+
+// ---------- Celular: puxar a tela para baixo sincroniza ----------
+// O gesto padrão do Chrome recarregaria a página, e recarregar fecha o cofre (a chave só existe na memória).
+// Por isso o recarregar do navegador fica desligado no app do celular (CSS .sem-recarregar), e o mesmo gesto,
+// feito no topo da tela, passa a sincronizar com o Drive. No computador, atualizar a página continua sendo só recarregar.
+function iniciarPuxarParaSincronizar() {
+  if (!MODO_CELULAR) return;
+  document.documentElement.classList.add('sem-recarregar');
+  const LIMITE = 70;
+  let inicioY = null, puxado = 0, ind = null;
+  const mostrar = (d) => {
+    if (!ind) { ind = el('div', { class: 'puxar-sinc', 'aria-hidden': 'true' }, icone('repetir', 18), el('span')); document.body.appendChild(ind); }
+    ind.style.transform = 'translate(-50%, ' + (Math.min(d, 110) - 44) + 'px)';
+    ind.classList.toggle('pronto', d >= LIMITE);
+    ind.lastChild.textContent = d >= LIMITE ? 'Solte para sincronizar' : 'Puxe para sincronizar';
+  };
+  const esconder = () => { if (ind) { ind.remove(); ind = null; } };
+  document.addEventListener('touchstart', (e) => {
+    const c = $('#conteudo');
+    inicioY = null;
+    if (!SESSAO.chave || !c || !c.contains(e.target) || c.scrollTop > 0 || e.touches.length !== 1 || document.querySelector('dialog[open]')) return;
+    inicioY = e.touches[0].clientY; puxado = 0;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (inicioY == null) return;
+    const c = $('#conteudo');
+    if (!c || c.scrollTop > 0) { inicioY = null; esconder(); return; }
+    puxado = (e.touches[0].clientY - inicioY) * 0.6;
+    if (puxado > 8) mostrar(puxado); else esconder();
+  }, { passive: true });
+  const soltar = () => {
+    if (inicioY == null) return;
+    const disparar = puxado >= LIMITE;
+    inicioY = null; esconder();
+    if (disparar) botaoSincronizarTopo();
+  };
+  document.addEventListener('touchend', soltar, { passive: true });
+  document.addEventListener('touchcancel', () => { inicioY = null; esconder(); }, { passive: true });
+}
+
+// ===================== 16 - Registro de lançamentos (em Configurações) =====================
+// Visão de análise: todos os lançamentos (entradas, saídas e transferências), organizados pelo mês de
+// referência, com subtotais, filtros e período próprio (inclusive "Tudo"). Os totais de Entradas, Saídas e
+// do Painel levam para cá já filtrados (abrirRegistro). As listas de Entradas e Saídas continuam iguais.
+
+ESTADO.config = 'ajustes';
+ESTADO.registro = { tipo: 'todos', periodo: { tipo: 'mes', mes: null }, filtros: {}, ordem: 'data-desc', origem: null, limite: 400 };
+
+const ORDENS_REGISTRO = [['data-desc', 'Data (mais nova primeiro)'], ['data-asc', 'Data (mais antiga primeiro)'], ['valor-desc', 'Maior valor primeiro'], ['recentes', 'Últimos lançados ou editados']];
+const TIPOS_REGISTRO = [['todos', 'Tudo'], ['entrada', 'Entradas'], ['saida', 'Saídas'], ['transferencia', 'Transferências']];
+
+// Leva ao registro já filtrado. periodo: objeto {tipo, mes} ou 'tudo'. origem: {aba, rotulo} para o "Voltar".
+function abrirRegistro({ tipo = 'todos', periodo, filtros = {}, ordem = 'data-desc', origem = null } = {}) {
+  const r = ESTADO.registro;
+  r.tipo = tipo;
+  r.periodo = periodo === 'tudo' ? { tipo: 'tudo', mes: (ESTADO.periodo.mes || mesAtual()) } : { ...(periodo || ESTADO.periodo) };
+  if (!r.periodo.mes) r.periodo.mes = mesAtual();
+  r.filtros = { ...filtros };
+  r.ordem = ordem;
+  r.origem = origem;
+  r.limite = 400;
+  ESTADO.config = 'registro';
+  irPara('ajustes');
+}
+
+function mesesDoRegistro() { const p = ESTADO.registro.periodo; return p.tipo === 'tudo' ? null : mesesDoPeriodo(p); }
+
+function filtrarRegistro() {
+  const r = ESTADO.registro, f = r.filtros;
+  const meses = mesesDoRegistro();
+  const set = meses ? new Set(meses) : null;
+  const busca = normalizar(f.busca);
+  const hoje = hojeISO();
+  return DB.lancamentos.filter((l) => {
+    if (r.tipo !== 'todos' && l.tipo !== r.tipo) return false;
+    if (!noEscopo(l)) return false;
+    if (set && !set.has(l.competencia)) return false;
+    if (f.categoriaId && (l.categoriaId || '') !== f.categoriaId) return false;
+    if (f.contaId && l.contaId !== f.contaId && l.contaDestinoId !== f.contaId) return false;
+    if (f.status === 'misturado') { if (!ehMisturado(l)) return false; }
+    else if (f.status === 'atrasado') { if (!(l.status === 'pendente' && l.data < hoje)) return false; }
+    else if (f.status && l.status !== f.status) return false;
+    if (busca) {
+      const parceiros = (l.divisao || []).map((d) => nomePessoa(d.parceiroId)).join(' ');
+      const alvo = normalizar([l.descricao, l.pessoa, l.obs, parceiros, nomeCategoria(l.categoriaId), nomeConta(l.contaId), l.contaDestinoId ? nomeConta(l.contaDestinoId) : '', numeroBR(l.valor)].join(' '));
+      if (!busca.split(/\s+/).every((p) => alvo.includes(p))) return false;
+    }
+    return true;
+  });
+}
+
+function ordenarRegistro(itens) {
+  const o = ESTADO.registro.ordem;
+  if (o === 'recentes') return itens.sort((a, b) => (a.atualizadoEm < b.atualizadoEm ? 1 : -1));
+  if (o === 'valor-desc') return itens.sort((a, b) => b.valor - a.valor || porDataDesc(a, b));
+  return itens.sort(o === 'data-asc' ? porDataAsc : porDataDesc);
+}
+
+function totaisRegistro(itens) {
+  const t = { ent: 0, entPago: 0, sai: 0, saiPago: 0, transf: 0 };
+  for (const l of itens) {
+    if (l.tipo === 'entrada') { t.ent += l.valor; if (l.status === 'pago') t.entPago += l.valor; }
+    else if (l.tipo === 'saida') { t.sai += l.valor; if (l.status === 'pago') t.saiPago += l.valor; }
+    else t.transf += l.valor;
+  }
+  return t;
+}
+
+function situacaoTexto(l) {
+  if (l.tipo === 'transferencia') return l.status === 'pago' ? 'Feita' : 'Agendada';
+  if (l.status === 'pago') return (l.tipo === 'entrada' ? 'Recebido' : 'Pago') + (l.pagoEm && l.pagoEm !== l.data ? ' em ' + dataBR(l.pagoEm).slice(0, 5) : '');
+  if (l.data < hojeISO()) return 'Atrasado';
+  return l.tipo === 'entrada' ? 'A receber' : 'A pagar';
+}
+
+function linhaRegistro(l) {
+  const cat = categoriaPorId(l.categoriaId);
+  const conta = contaPorId(l.contaId);
+  const transf = l.tipo === 'transferencia';
+  const atrasado = !transf && l.status === 'pendente' && l.data < hojeISO();
+  const catTexto = transf ? 'Transferência → ' + nomeConta(l.contaDestinoId) : cat ? cat.nome : 'Sem categoria';
+  const sinal = l.tipo === 'entrada' ? '+ ' : l.tipo === 'saida' ? '− ' : '';
+  const abrir = () => abrirFormLancamento({ lanc: l });
+  return el('div', { class: ['reg-linha', 'tipo-' + l.tipo, l.status === 'pendente' ? 'pendente' : '', atrasado ? 'atrasado' : ''], role: 'button', tabindex: 0,
+    title: 'Abrir para ver ou editar', onclick: abrir, onkeydown: (e) => { if (e.key === 'Enter') abrir(); } },
+  el('span', { class: 'reg-data', text: dataBR(l.data).slice(0, 5) }),
+  el('span', { class: 'reg-desc' },
+    el('span', { class: 'reg-titulo' },
+      el('strong', { text: l.descricao || (transf ? 'Transferência' : cat ? cat.nome : 'Sem descrição') }),
+      l.grupo ? el('span', { class: 'etiqueta', title: l.rec === 'fixo' ? 'Lançamento fixo mensal' : 'Parcelado' }, icone('repetir', 12), ' ' + l.parcela + '/' + l.parcelas) : null,
+      ehMisturado(l) ? el('span', { class: 'etiqueta mistura', text: 'na conta ' + (conta && conta.escopo === 'E' ? 'do escritório' : 'pessoal') }) : null,
+      l.divisao ? el('span', { class: 'etiqueta', text: 'dividido' }) : null,
+      l.origemId ? el('span', { class: 'etiqueta', text: 'repasse' }) : null),
+    el('span', { class: 'reg-sub', text: [catTexto, nomeConta(l.contaId), situacaoTexto(l)].join(' · ') })),
+  el('span', { class: 'reg-cat', text: catTexto }),
+  el('span', { class: 'reg-conta', text: nomeConta(l.contaId) }),
+  el('span', { class: ['reg-escopo', 'escopo-' + l.escopo], text: l.escopo === 'E' ? 'Escr.' : 'Pess.', title: ESCOPOS[l.escopo] }),
+  el('span', { class: 'reg-sit', text: situacaoTexto(l) }),
+  el('span', { class: ['reg-valor', 'valor', l.tipo === 'entrada' ? 'cor-texto-entrada' : ''], text: sinal + moeda(l.valor) }));
+}
+
+function cabecalhoRegistro() {
+  return el('div', { class: 'reg-cabecalho' }, ['Data', 'Descrição', 'Categoria', 'Conta', 'P/E', 'Situação', 'Valor'].map((t) => el('span', { text: t })));
+}
+
+function telaRegistro(cont) {
+  const r = ESTADO.registro, f = r.filtros;
+  if (!r.periodo.mes) r.periodo.mes = mesAtual();
+  const itens = ordenarRegistro(filtrarRegistro());
+  const tot = totaisRegistro(itens);
+
+  if (r.origem) {
+    const o = r.origem;
+    cont.appendChild(el('div', { class: 'reg-voltar' }, el('button', { class: 'link-botao', type: 'button', onclick: () => { r.origem = null; irPara(o.aba); } }, icone('esquerda', 16), ' Voltar para ' + o.rotulo)));
+  }
+
+  // Tipo e período
+  cont.appendChild(el('div', { class: 'barra-filtros' },
+    alternador(TIPOS_REGISTRO, r.tipo, (v) => { r.tipo = v; if (v === 'transferencia') delete f.categoriaId; r.limite = 400; renderizar(); })));
+  cont.appendChild(barraPeriodo(() => { r.limite = 400; renderizar(); }, r.periodo, true));
+
+  // Filtros
+  const busca = el('input', { type: 'search', placeholder: 'Buscar por nome, pessoa, valor…', value: f.busca || '', class: 'busca busca-registro' });
+  busca.addEventListener('input', debounce(() => { f.busca = busca.value; renderizarMantendoFoco('.busca-registro'); }, 250));
+  const cats = DB.categorias.filter((c) => (r.tipo === 'todos' || c.tipo === r.tipo) && (noEscopo(c) || c.escopo === 'A' || DB.config.escopo === 'T'))
+    .sort((a, b) => a.tipo.localeCompare(b.tipo) || a.nome.localeCompare(b.nome));
+  const selCat = r.tipo === 'transferencia' ? null : seletor([['', 'Todas as categorias'], ...cats.map((c) => [c.id, c.nome + (r.tipo === 'todos' ? (c.tipo === 'entrada' ? ' (entrada)' : ' (saída)') : '')])], f.categoriaId || '', { 'aria-label': 'Categoria' });
+  if (selCat) selCat.addEventListener('change', () => { f.categoriaId = selCat.value || undefined; renderizar(); });
+  const selConta = seletor([['', 'Todas as contas'], ...contasDoEscopo(true).map((c) => [c.id, c.nome])], f.contaId || '', { 'aria-label': 'Conta' });
+  selConta.addEventListener('change', () => { f.contaId = selConta.value || undefined; renderizar(); });
+  const selStatus = seletor([['', 'Todas as situações'], ['pago', 'Pagos / recebidos'], ['pendente', 'A pagar / a receber'], ['atrasado', 'Atrasados'], ['misturado', 'Pessoal e escritório misturados']], f.status || '', { 'aria-label': 'Situação' });
+  selStatus.addEventListener('change', () => { f.status = selStatus.value || undefined; renderizar(); });
+  const selOrdem = seletor(ORDENS_REGISTRO, r.ordem, { 'aria-label': 'Ordem' });
+  selOrdem.addEventListener('change', () => { r.ordem = selOrdem.value; renderizar(); });
+  const temFiltro = f.busca || f.categoriaId || f.contaId || f.status;
+  cont.appendChild(el('div', { class: 'barra-filtros secundaria' },
+    el('div', { class: 'busca-caixa' }, icone('busca', 18), busca), selCat, selConta, selStatus, selOrdem,
+    temFiltro ? el('button', { class: 'link-botao', type: 'button', text: 'Limpar filtros', onclick: () => { r.filtros = {}; renderizar(); } }) : null,
+    el('div', { class: 'espaco' }),
+    el('button', { class: 'botao', type: 'button', title: 'Exportar esta lista para Excel (CSV)', onclick: () => exportarCSV(itens, 'registro') }, icone('baixar', 18), el('span', { class: 'some-celular', text: ' Excel' }))));
+
+  // Totais do que está na tela
+  const quantos = itens.length + (itens.length === 1 ? ' lançamento' : ' lançamentos') + (temFiltro ? ' (filtrado)' : '');
+  const tiles = [];
+  if (r.tipo === 'transferencia') tiles.push(tileNumero({ rotulo: 'Transferido', classe: 'resultado', valor: moeda(tot.transf), sub: quantos }));
+  else {
+    if (r.tipo !== 'saida') tiles.push(tileNumero({ rotulo: 'Entradas', classe: 'entrada', valor: moeda(tot.ent), sub: moeda(tot.entPago) + ' recebido · ' + moeda(tot.ent - tot.entPago) + ' a receber' }));
+    if (r.tipo !== 'entrada') tiles.push(tileNumero({ rotulo: 'Saídas', classe: 'saida', valor: moeda(tot.sai), sub: moeda(tot.saiPago) + ' pago · ' + moeda(tot.sai - tot.saiPago) + ' a pagar' }));
+    if (r.tipo === 'todos') tiles.push(tileNumero({ rotulo: tot.ent - tot.sai >= 0 ? 'Sobrou' : 'Faltou', classe: 'resultado', valor: moeda(Math.abs(tot.ent - tot.sai)), sub: quantos }));
+    else tiles[tiles.length - 1].appendChild(el('div', { class: 'tile-sub', text: quantos }));
+  }
+  cont.appendChild(el('div', { class: 'grade-tiles compacta' }, tiles));
+
+  if (!itens.length) {
+    cont.appendChild(cartaoVazio('tabela', temFiltro ? 'Nada encontrado com esses filtros.' : 'Nenhum lançamento neste período.',
+      'Troque o período (há a opção "Tudo") ou limpe os filtros.', null));
+    return;
+  }
+
+  // Lista: por mês de referência (com subtotais), ou corrida quando a ordem é "últimos lançados"
+  const lista = el('div', { class: 'cartao reg-lista' }, cabecalhoRegistro());
+  const visiveis = itens.slice(0, r.limite);
+  if (r.ordem === 'recentes') {
+    lista.appendChild(el('div', { class: 'reg-mes' }, el('span', { text: 'Do último lançado ou editado para o mais antigo' })));
+    for (const l of visiveis) lista.appendChild(linhaRegistro(l));
+  } else {
+    const grupos = agrupar(visiveis, (l) => l.competencia);
+    const chaves = Array.from(grupos.keys()).sort();
+    if (r.ordem !== 'data-asc') chaves.reverse();
+    for (const mes of chaves) {
+      const ls = grupos.get(mes);
+      const t = totaisRegistro(itens.filter((l) => l.competencia === mes));
+      const partes = [];
+      if (t.ent) partes.push(el('span', { class: 'cor-texto-entrada valor', text: '+ ' + moeda(t.ent) }));
+      if (t.sai) partes.push(el('span', { class: 'valor', text: '− ' + moeda(t.sai) }));
+      if (t.ent && t.sai) partes.push(el('span', { class: 'valor reg-res', text: '= ' + (t.ent - t.sai < 0 ? '− ' : '') + moeda(Math.abs(t.ent - t.sai)) }));
+      if (t.transf && r.tipo === 'transferencia') partes.push(el('span', { class: 'valor', text: moeda(t.transf) }));
+      lista.appendChild(el('div', { class: 'reg-mes' },
+        el('span', { text: capitalizar(nomeMes(mes)) + ' · ' + ls.length + (ls.length === 1 ? ' lançamento' : ' lançamentos') }),
+        el('span', { class: 'reg-mes-totais' }, partes)));
+      for (const l of ls) lista.appendChild(linhaRegistro(l));
+    }
+  }
+  cont.appendChild(lista);
+  if (itens.length > r.limite) {
+    cont.appendChild(el('button', { class: 'botao largo', type: 'button', text: 'Mostrar mais (' + (itens.length - r.limite) + ' restantes)', onclick: () => { r.limite += 400; renderizar(); } }));
+  }
+  cont.appendChild(el('p', { class: 'nota', text: 'Organizado pelo mês de referência: compra no cartão aparece no mês da fatura; o resto, no mês do vencimento. Clique numa linha para ver ou editar.' }));
 }
 
 // ===================== 99 - Partida =====================
